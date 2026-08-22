@@ -1,0 +1,36 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <!-- Shield / Crest Outer -->
+    <path
+        android:fillColor="#FFB800"
+        android:pathData="M32,4 L52,14 L52,36 C52,48 42,56 32,60 C22,56 12,48 12,36 L12,14 Z"/>
+    <!-- Inner Dark Core -->
+    <path
+        android:fillColor="#151922"
+        android:pathData="M32,8 L48,16 L48,35 C48,45 40,52 32,56 C24,52 16,45 16,35 L16,16 Z"/>
+    <!-- Esports Trophy / Gamepad Silhouette in Gold -->
+    <!-- Trophy Cup -->
+    <path
+        android:fillColor="#FFC837"
+        android:pathData="M26,20 L38,20 L38,30 C38,33.3 35.3,36 32,36 C28.7,36 26,33.3 26,30 Z"/>
+    <!-- Trophy Handles -->
+    <path
+        android:strokeColor="#FFC837"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M26,22 C22,22 22,28 26,28 M38,22 C42,22 42,28 38,28"/>
+    <!-- Trophy Base -->
+    <path
+        android:fillColor="#FFB800"
+        android:pathData="M30,36 L34,36 L34,42 L30,42 Z"/>
+    <path
+        android:fillColor="#FFB800"
+        android:pathData="M24,42 L40,42 L40,45 L24,45 Z"/>
+    <!-- Star on top -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M32,12 L33.2,15.5 L36.8,15.5 L33.9,17.6 L35,21 L32,18.8 L29,21 L30.1,17.6 L27.2,15.5 L30.8,15.5 Z"/>
+</vector>
