@@ -325,6 +325,59 @@ object LocalMockDataSource {
         )
     )
 
+    val defaultEconomyConfig = RewardEconomyConfig(
+        scoreTier1Max = 499,
+        scoreTier1Points = 0,
+        scoreTier2Max = 999,
+        scoreTier2Points = 5,
+        scoreTier3Max = 1999,
+        scoreTier3Points = 10,
+        scoreTier4Points = 20,
+        dailyGamePointsCap = 60,
+        rewardedAdBasePoints = 50,
+        rewardedAdMultiplier = 3,
+        sessionCooldownSeconds = 30
+    )
+
+    val miniGames = listOf(
+        MiniGameItem(
+            id = "pinball",
+            titleArabic = "عازم بينبول السيبراني",
+            shortDescriptionArabic = "اضغط لتشغيل المضارب المغناطيسية وحقق أعلى رصيد نقاط وتحدي الكرات الثلاث",
+            categoryNameArabic = "ألعاب أركيد ونقر 🕹️",
+            assetUrl = "file:///android_asset/games/pinball/index.html",
+            maxRewardPoints = 20,
+            dailyLimitSessions = 5,
+            currentDailySessionsPlayed = 0,
+            badgeArabic = "اللعبة المميزة 🔥",
+            accentColorHex = "#FFB800"
+        ),
+        MiniGameItem(
+            id = "reflex",
+            titleArabic = "تحدي سرعة الاستجابة (Cyber Reflex)",
+            shortDescriptionArabic = "اختبر سرعة رد فعلك واضغط على الأهداف الذهبية والنيونية قبل انقضاء 30 ثانية",
+            categoryNameArabic = "سرعة وتركيز ⚡",
+            assetUrl = "file:///android_asset/games/reflex/index.html",
+            maxRewardPoints = 20,
+            dailyLimitSessions = 5,
+            currentDailySessionsPlayed = 0,
+            badgeArabic = "تحدي السرعة ⚡",
+            accentColorHex = "#00E5FF"
+        ),
+        MiniGameItem(
+            id = "space_glide",
+            titleArabic = "المناور النيوني (Neon Space Glide)",
+            shortDescriptionArabic = "حلق بسفينتك النيونية بين البوابات الكهرومغناطيسية واجمع الجواهر لأطول مسافة",
+            categoryNameArabic = "مغامرات طيران 🚀",
+            assetUrl = "file:///android_asset/games/space_glide/index.html",
+            maxRewardPoints = 20,
+            dailyLimitSessions = 5,
+            currentDailySessionsPlayed = 0,
+            badgeArabic = "جديد 🚀",
+            accentColorHex = "#10B981"
+        )
+    )
+
     val earnOpportunities = listOf(
         EarnOpportunity(
             id = "earn_daily_checkin",

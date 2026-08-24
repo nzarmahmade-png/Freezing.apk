@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CardGiftcard
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -112,75 +110,33 @@ fun AppTopBar(
             }
         }
 
-        // Quick Stats & Actions
+        // Clean Actions: Leaderboard shortcut & Notifications Bell
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Wallet balance pill (Total available)
-            Surface(
+            // Quick Leaderboard Icon Button
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .clickable(onClick = onWalletClick),
-                color = ObsidianCard,
-                border = androidx.compose.foundation.BorderStroke(1.dp, NeonGreen.copy(alpha = 0.4f))
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(ObsidianCard)
+                    .border(1.dp, ObsidianBorder, CircleShape)
+                    .clickable(onClick = onRankingsClick),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountBalanceWallet,
-                        contentDescription = "المحفظة",
-                        tint = NeonGreenLight,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "%,d ج.س".format(user.totalAvailableBalanceSDG),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = NeonGreenLight,
-                            fontSize = 11.sp
-                        )
-                    )
-                }
-            }
-
-            // Reward points pill
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .clickable(onClick = onRewardsClick),
-                color = ObsidianCard,
-                border = androidx.compose.foundation.BorderStroke(1.dp, NeonGold.copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CardGiftcard,
-                        contentDescription = "المكافآت",
-                        tint = NeonGoldLight,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "%,d".format(user.rewardPoints),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = NeonGoldLight,
-                            fontSize = 11.sp
-                        )
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "التصنيف والترتيب",
+                    tint = NeonGoldLight,
+                    modifier = Modifier.size(19.dp)
+                )
             }
 
             // Notifications Bell
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(ObsidianCard)
                     .border(1.dp, ObsidianBorder, CircleShape)
@@ -202,7 +158,7 @@ fun AppTopBar(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = "الإشعارات",
                         tint = if (unreadNotificationsCount > 0) NeonGoldLight else TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }

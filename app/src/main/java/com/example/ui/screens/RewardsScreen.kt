@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.ui.components.GlassCard
+import com.example.ui.components.MiniGamePlayerDialog
 import com.example.ui.components.SectionHeader
 import com.example.ui.theme.*
 
@@ -34,11 +35,20 @@ fun RewardsScreen(
     rewardItems: List<RewardItem>,
     earnOpportunities: List<EarnOpportunity>,
     redeemedVouchers: List<RedeemedVoucher>,
+    miniGames: List<MiniGameItem>,
+    dailyGamePointsEarned: Int,
+    economyConfig: RewardEconomyConfig,
+    activePlayingGame: MiniGameItem?,
+    lastGameRewardResult: GameRewardResult?,
     isWatchingAd: Boolean,
     adCountdown: Int,
     onClaimOpportunity: (EarnOpportunity) -> Unit,
     onWatchAd: (EarnOpportunity) -> Unit,
     onRedeemReward: (RewardItem) -> Unit,
+    onPlayGame: (MiniGameItem) -> Unit,
+    onCloseGame: () -> Unit,
+    onSubmitGameSession: (GameSessionSubmission, Boolean) -> Unit,
+    onWatchAdForGameMultiplier: (GameSessionSubmission) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf<RewardCategory?>(null) }
@@ -57,7 +67,7 @@ fun RewardsScreen(
             .background(ObsidianBg),
         contentPadding = PaddingValues(bottom = 90.dp)
     ) {
-        // Rewards Top Header
+        // 1. Rewards Screen Header
         item {
             Column(
                 modifier = Modifier
@@ -66,7 +76,7 @@ fun RewardsScreen(
                     .padding(16.dp)
             ) {
                 Text(
-                    text = "المكافآت ومتجر عازم 🎁",
+                    text = "مركز المكافآت والألعاب 🎁",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Black,
                         color = TextPrimary,
@@ -74,27 +84,27 @@ fun RewardsScreen(
                     )
                 )
                 Text(
-                    text = "اجمع النقاط واستبدلها فوراً بجواهر فري فاير وشدات ببجي وكوبونات خصم",
+                    text = "العب الألعاب المصغرة، شاهد الإعلانات الترويجية، واستبدل نقاطك فوراً بشدات وجواهر وقسائم",
                     style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
                 )
             }
         }
 
-        // Reward Points Balance Card
+        // 2. Dedicated Balance Card (Exclusive to Rewards Page)
         item {
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
                 backgroundColor = ObsidianCard,
-                borderColor = NeonGold.copy(alpha = 0.5f)
+                borderColor = NeonGold.copy(alpha = 0.6f)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                listOf(NeonGold.copy(alpha = 0.12f), Color.Transparent)
+                                listOf(NeonGold.copy(alpha = 0.15f), Color.Transparent)
                             )
                         )
                         .padding(16.dp)
@@ -107,17 +117,18 @@ fun RewardsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(NeonGold.copy(alpha = 0.2f)),
+                                    .background(NeonGold.copy(alpha = 0.2f))
+                                    .border(1.dp, NeonGoldLight, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = NeonGoldLight)
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "رصيد نقاط المكافآت",
+                                    text = "رصيد نقاط المكافآت الإجمالي",
                                     style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                                 )
                                 Text(
@@ -130,16 +141,211 @@ fun RewardsScreen(
                                 )
                             }
                         }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = NeonGold.copy(alpha = 0.2f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonGold.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "جاهز للاستبدال 💎",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonGoldLight,
+                                    fontSize = 11.sp
+                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Earn Points Section
+        // 3. Dedicated Mini-Games Area (HTML5 Interactive Games with Horizontal Carousel)
         item {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SectionHeader(
+                    title = "ساحة الألعاب وكسب النقاط 🕹️",
+                    subtitle = "ألعاب HTML5 خفيفة وسريعة التفاعل لا تتطلب تحميل خارجي"
+                )
+
+                // Daily Game Points Economy Quota Bar
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    color = ObsidianCard,
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ObsidianBorder)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.SportsEsports, contentDescription = null, tint = NeonCyanLight, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "الحد اليومي لنقاط اللعب المجاني",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            Text(
+                                text = "$dailyGamePointsEarned / ${economyConfig.dailyGamePointsCap} نقطة",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (dailyGamePointsEarned >= economyConfig.dailyGamePointsCap) NeonRedLight else NeonGreenLight,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = {
+                                (dailyGamePointsEarned.toFloat() / economyConfig.dailyGamePointsCap.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = NeonGold,
+                            trackColor = ObsidianBorder
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "💡 نظام الاقتصاد العادل: كل 500 سكور = 5 نقاط، 1000 = 10 نقاط، 2000+ = 20 نقطة. شاهد إعلاناً لمضاعفة مكافأتك 3x!",
+                            style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Horizontal Mini-Games Carousel
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(miniGames) { game ->
+                        MiniGameCard(
+                            game = game,
+                            onPlay = { onPlayGame(game) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Rewarded Ads & Economy Multiplier Card (Monetization Core)
+        item {
+            Spacer(modifier = Modifier.height(18.dp))
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                backgroundColor = ObsidianCardElevated,
+                borderColor = NeonCyan.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(NeonCyan.copy(alpha = 0.12f), Color.Transparent)
+                            )
+                        )
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(NeonCyan.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = NeonCyanLight, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "إعلانات الرعاة والشركاء",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(NeonCyan.copy(alpha = 0.2f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "+50 نقطة",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = NeonCyanLight,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "شاهد إعلانات قصيرة لدعم جوائز بطولات دارفور والحصول على أعلى مكافأة نقاط",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 11.sp)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val adOpp = earnOpportunities.firstOrNull { it.actionType == EarnActionType.WATCH_REWARD_AD }
+                                ?: EarnOpportunity(
+                                    id = "earn_watch_ad",
+                                    titleArabic = "مشاهدة إعلان راعي",
+                                    descriptionArabic = "شاهد إعلاناً واحصل على 50 نقطة فورية",
+                                    pointsReward = 50,
+                                    xpReward = 100,
+                                    actionType = EarnActionType.WATCH_REWARD_AD
+                                )
+                            onWatchAd(adOpp)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color.Black),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("مشاهدة 🎬", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // 5. Daily Earn Opportunities Section
+        item {
+            Spacer(modifier = Modifier.height(18.dp))
             SectionHeader(
-                title = "طرق كسب النقاط اليومية ⚡",
-                subtitle = "أكمل المهام اليومية لزيادة رصيدك"
+                title = "طرق كسب النقاط الإضافية ⚡",
+                subtitle = "سجل الدخول يومياً وشارك في فعاليات المجتمع"
             )
         }
 
@@ -151,12 +357,12 @@ fun RewardsScreen(
             )
         }
 
-        // AzomStore Catalog Header & Category Chips
+        // 6. AzomStore Catalog Header & Category Chips
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             SectionHeader(
                 title = "متجر الاستبدال الرقمي (AzomStore) 💎",
-                subtitle = "أكواد شحن فورية وقسائم تسوق"
+                subtitle = "أكواد شحن فورية وقسائم تسوق وبطاقات ألعاب"
             )
 
             LazyRow(
@@ -190,7 +396,7 @@ fun RewardsScreen(
             )
         }
 
-        // My Redeemed Vouchers Section
+        // 7. My Redeemed Vouchers Section
         if (redeemedVouchers.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
@@ -209,8 +415,23 @@ fun RewardsScreen(
         }
     }
 
-    // Rewarded Ad Simulation Overlay
-    if (isWatchingAd) {
+    // Active HTML5 Game Dialog (Pinball / Cyber Reflex / Space Glide)
+    if (activePlayingGame != null) {
+        MiniGamePlayerDialog(
+            game = activePlayingGame,
+            onDismiss = onCloseGame,
+            onSubmitGameSession = onSubmitGameSession,
+            lastRewardResult = lastGameRewardResult,
+            isWatchingAd = isWatchingAd,
+            adCountdown = adCountdown,
+            onWatchAdForMultiplier = onWatchAdForGameMultiplier,
+            dailyPointsEarned = dailyGamePointsEarned,
+            dailyPointsCap = economyConfig.dailyGamePointsCap
+        )
+    }
+
+    // Rewarded Ad Simulation Overlay (Standalone)
+    if (isWatchingAd && activePlayingGame == null) {
         AlertDialog(
             onDismissRequest = {},
             containerColor = ObsidianCard,
@@ -294,6 +515,165 @@ fun RewardsScreen(
             }
         )
     }
+}
+
+@Composable
+fun MiniGameCard(
+    game: MiniGameItem,
+    onPlay: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = when (game.id) {
+        "pinball" -> NeonGold
+        "reflex" -> NeonCyan
+        else -> NeonGreen
+    }
+
+    GlassCard(
+        modifier = modifier
+            .width(260.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onPlay),
+        backgroundColor = ObsidianCard,
+        borderColor = accentColor.copy(alpha = 0.5f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(accentColor.copy(alpha = 0.12f), Color.Transparent)
+                    )
+                )
+                .padding(14.dp)
+        ) {
+            // Card Top Row: Badge & Category
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ObsidianCardElevated)
+                        .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = when (game.id) {
+                            "pinball" -> Icons.Default.SportsEsports
+                            "reflex" -> Icons.Default.FlashOn
+                            else -> Icons.Default.RocketLaunch
+                        },
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                if (game.badgeArabic != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accentColor.copy(alpha = 0.2f))
+                            .border(0.5.dp, accentColor, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = game.badgeArabic,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Game Name
+            Text(
+                text = game.titleArabic,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Black,
+                    color = TextPrimary,
+                    fontSize = 15.sp
+                ),
+                maxLines = 1
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Short Description
+            Text(
+                text = game.shortDescriptionArabic,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                ),
+                maxLines = 2,
+                modifier = Modifier.height(30.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Reward Tier & Play Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "المكافأة المستحقة",
+                        style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 9.sp)
+                    )
+                    Text(
+                        text = "حتى ${game.maxRewardPoints} نقطة 🎁",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+
+                Button(
+                    onClick = onPlay,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentColor,
+                        contentColor = if (accentColor == NeonGold) TextOnAccent else Color.Black
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text("العب الآن 🕹️", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LesserText(
+    text: String,
+    color: Color,
+    fontSize: androidx.compose.ui.unit.TextUnit,
+    fontWeight: FontWeight
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(
+            color = color,
+            fontSize = fontSize,
+            fontWeight = fontWeight
+        )
+    )
 }
 
 @Composable

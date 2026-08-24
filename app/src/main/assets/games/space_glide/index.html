@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>المناور النيوني - Neon Hopper</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
+    body {
+      background-color: #0d0f14;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      width: 100vw;
+      padding: 8px;
+    }
+    #header {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(21, 25, 34, 0.9);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 12px;
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .stat-box { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { font-size: 10px; color: #94a3b8; }
+    .stat-val { font-weight: 900; color: #10b981; font-size: 16px; }
+    #game-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 6px 0;
+    }
+    canvas {
+      background: radial-gradient(circle at 50% 50%, #151d28 0%, #0d0f14 100%);
+      border: 2px solid #10b981;
+      border-radius: 16px;
+      width: 100%;
+      height: 100%;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+    .overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(13, 15, 20, 0.9);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+    .overlay.hidden { display: none; }
+    .overlay h2 { font-size: 24px; color: #10b981; margin-bottom: 8px; font-weight: 900; }
+    .overlay p { font-size: 13px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.5; }
+    .reward-preview {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px dashed #10b981;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      color: #6ee7b7;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .btn-action {
+      background: linear-gradient(90deg, #10b981, #059669);
+      border: none;
+      color: #0d0f14;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 12px 28px;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+    #tap-hint {
+      position: absolute;
+      bottom: 20px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div class="stat-box">
+      <span class="stat-label">المسافة</span>
+      <span class="stat-val" id="score-display">0m</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">المكافأة</span>
+      <span class="stat-val" id="reward-display" style="color: #6ee7b7;">0 نقطة</span>
+    </div>
+  </div>
+
+  <div id="game-container">
+    <canvas id="hopper-canvas"></canvas>
+    <div id="tap-hint">المس الشاشة للارتفاع والتوجيه 🚀</div>
+
+    <div id="start-overlay" class="overlay">
+      <h2>المناور النيوني 🚀</h2>
+      <p>اضغط للتحليق بسفينتك النيونية وتفادي الحواجز الكهرومغناطيسية واجمع الجواهر!</p>
+      <div class="reward-preview">
+        🎯 500+ = 5 نقاط | 1,000+ = 10 نقاط | 2,000+ = 20 نقطة
+      </div>
+      <button class="btn-action" id="btn-start">انطلق الآن 🚀</button>
+    </div>
+
+    <div id="game-over-overlay" class="overlay hidden">
+      <h2>اصطدام الحزام! 💥</h2>
+      <p id="final-score-text">المسافة: 0m</p>
+      <div class="reward-preview" id="final-reward-text">المكافأة المستحقة: 0 نقطة</div>
+      <button class="btn-action" id="btn-submit-score">اعتماد واستلام المكافأة ✨</button>
+      <button class="btn-action" id="btn-play-again" style="margin-top: 8px; background: rgba(255,255,255,0.15); color: #fff;">محاولة جديدة 🔄</button>
+    </div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playSound(freq, duration = 0.1, type = 'sine') {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    const canvas = document.getElementById('hopper-canvas');
+    const ctx = canvas.getContext('2d');
+    let width = 360, height = 480;
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let ship = { x: 60, y: 200, vy: 0, r: 12 };
+    let obstacles = [];
+    let score = 0;
+    let gameActive = false;
+    let startTime = 0;
+    let tapCount = 0;
+    let sessionToken = 'AZOM_HOPPER_' + Math.random().toString(36).substring(2, 10);
+
+    function calculateReward(sc) {
+      if (sc < 500) return 0;
+      if (sc < 1000) return 5;
+      if (sc < 2000) return 10;
+      return 20;
+    }
+
+    function jump() {
+      if (!gameActive) return;
+      initAudio();
+      tapCount++;
+      ship.vy = -6.5;
+      playSound(600, 0.08, 'triangle');
+    }
+
+    function addObstacle() {
+      const gap = 110;
+      const topHeight = 50 + Math.random() * (height - gap - 100);
+      obstacles.push({
+        x: width + 20,
+        top: topHeight,
+        bottom: topHeight + gap,
+        width: 36,
+        passed: false
+      });
+    }
+
+    let spawnTimer = 0;
+
+    function update() {
+      if (!gameActive) return;
+
+      ship.vy += 0.28;
+      ship.y += ship.vy;
+
+      if (ship.y - ship.r < 0 || ship.y + ship.r > height) {
+        endGame();
+        return;
+      }
+
+      spawnTimer++;
+      if (spawnTimer > 85) {
+        addObstacle();
+        spawnTimer = 0;
+      }
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.x -= 2.6;
+
+        // Collision check
+        if (ship.x + ship.r > obs.x && ship.x - ship.r < obs.x + obs.width) {
+          if (ship.y - ship.r < obs.top || ship.y + ship.r > obs.bottom) {
+            endGame();
+            return;
+          }
+        }
+
+        if (!obs.passed && obs.x + obs.width < ship.x) {
+          obs.passed = true;
+          score += 150;
+          playSound(880, 0.12, 'sine');
+          document.getElementById('score-display').innerText = score + 'm';
+          document.getElementById('reward-display').innerText = calculateReward(score) + ' نقطة';
+        }
+
+        if (obs.x + obs.width < -10) {
+          obstacles.splice(i, 1);
+        }
+      }
+
+      score += 1;
+      document.getElementById('score-display').innerText = score + 'm';
+      document.getElementById('reward-display').innerText = calculateReward(score) + ' نقطة';
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw obstacles
+      ctx.fillStyle = '#10b981';
+      ctx.shadowColor = '#10b981';
+      ctx.shadowBlur = 12;
+      obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, 0, obs.width, obs.top);
+        ctx.fillRect(obs.x, obs.bottom, obs.width, height - obs.bottom);
+      });
+
+      // Draw ship
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ship.x, ship.y, ship.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 18;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    function startGame() {
+      initAudio();
+      ship = { x: 60, y: height / 2, vy: 0, r: 12 };
+      obstacles = [];
+      score = 0;
+      spawnTimer = 0;
+      tapCount = 0;
+      startTime = Date.now();
+      sessionToken = 'AZOM_HOPPER_' + Math.random().toString(36).substring(2, 10);
+      gameActive = true;
+      document.getElementById('start-overlay').classList.add('hidden');
+      document.getElementById('game-over-overlay').classList.add('hidden');
+      document.getElementById('score-display').innerText = '0m';
+      document.getElementById('reward-display').innerText = '0 نقطة';
+    }
+
+    function endGame() {
+      gameActive = false;
+      playSound(150, 0.3, 'sawtooth');
+      const pts = calculateReward(score);
+      document.getElementById('final-score-text').innerText = 'المسافة المقطوعة: ' + score + 'm';
+      document.getElementById('final-reward-text').innerText = 'المكافأة المستحقة: +' + pts + ' نقطة مكافأة 🎁';
+      document.getElementById('game-over-overlay').classList.remove('hidden');
+    }
+
+    function submitScore() {
+      const dur = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+      const pts = calculateReward(score);
+      if (window.AndroidGameBridge && typeof window.AndroidGameBridge.onGameFinished === 'function') {
+        window.AndroidGameBridge.onGameFinished('space_glide', score, pts, dur, tapCount, sessionToken);
+      } else {
+        alert('تم احتساب النقاط: ' + pts + ' نقطة!');
+      }
+    }
+
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+    canvas.addEventListener('mousedown', jump);
+    document.getElementById('btn-start').addEventListener('click', startGame);
+    document.getElementById('btn-play-again').addEventListener('click', startGame);
+    document.getElementById('btn-submit-score').addEventListener('click', submitScore);
+  </script>
+</body>
+</html>

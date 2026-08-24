@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>عازم بينبول السيبراني - Azom Cyber Pinball</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body {
+      background-color: #0d0f14;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      width: 100vw;
+      padding: 8px;
+    }
+    #header {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(21, 25, 34, 0.9);
+      border: 1px solid rgba(255, 184, 0, 0.3);
+      border-radius: 12px;
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .stat-val {
+      font-weight: 900;
+      color: #ffb800;
+      font-size: 16px;
+    }
+    .lives-val {
+      color: #ff4757;
+      font-size: 15px;
+      letter-spacing: 2px;
+    }
+    #game-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 4px 0;
+    }
+    canvas {
+      background: radial-gradient(circle at 50% 30%, #171b26 0%, #0d0f14 100%);
+      border: 2px solid #ffb800;
+      box-shadow: 0 0 20px rgba(255, 184, 0, 0.2), inset 0 0 15px rgba(0, 229, 255, 0.1);
+      border-radius: 16px;
+      width: 100%;
+      height: 100%;
+      max-height: 520px;
+    }
+    #controls {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      gap: 8px;
+      height: 64px;
+    }
+    .flipper-btn {
+      flex: 1;
+      background: linear-gradient(180deg, #1e2533 0%, #151922 100%);
+      border: 1.5px solid rgba(0, 229, 255, 0.4);
+      color: #00e5ff;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: all 0.05s;
+    }
+    .flipper-btn:active, .flipper-btn.active {
+      background: #00e5ff;
+      color: #0d0f14;
+      border-color: #00e5ff;
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.8);
+      transform: scale(0.97);
+    }
+    .launch-btn {
+      background: linear-gradient(180deg, #ffb800 0%, #e6a100 100%);
+      border: 1.5px solid #ffe082;
+      color: #0d0f14;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 900;
+      padding: 0 14px;
+    }
+    .launch-btn:active {
+      transform: scale(0.95);
+      background: #ffd54f;
+    }
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(13, 15, 20, 0.88);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+    .overlay.hidden {
+      display: none;
+    }
+    .overlay h2 {
+      font-size: 24px;
+      color: #ffb800;
+      margin-bottom: 8px;
+      font-weight: 900;
+    }
+    .overlay p {
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .overlay .reward-preview {
+      background: rgba(255, 184, 0, 0.12);
+      border: 1px dashed #ffb800;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      color: #ffc837;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .btn-action {
+      background: linear-gradient(90deg, #ffb800, #ff8c00);
+      border: none;
+      color: #0d0f14;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 12px 28px;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255, 184, 0, 0.4);
+    }
+    .btn-action:active {
+      transform: scale(0.96);
+    }
+    .btn-sound {
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #94a3b8;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Game Header -->
+  <div id="header">
+    <div class="stat-box">
+      <span class="stat-label">النقاط</span>
+      <span class="stat-val" id="score-display">0</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">المكافأة المحتملة</span>
+      <span class="stat-val" id="reward-display" style="color: #00e5ff;">0 نقطة</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">الكرات</span>
+      <span class="lives-val" id="lives-display">● ● ●</span>
+    </div>
+    <button class="btn-sound" id="btn-sound-toggle">🔊 صوت</button>
+  </div>
+
+  <!-- Game Canvas Area -->
+  <div id="game-container">
+    <canvas id="pinball-canvas"></canvas>
+
+    <!-- Start Overlay -->
+    <div id="start-overlay" class="overlay">
+      <h2>عازم بينبول السيبراني 🕹️</h2>
+      <p>اضغط لتشغيل المضارب وحافظ على الكرة داخل الملعب لجمع أعلى النقاط والمكافآت!</p>
+      <div class="reward-preview">
+        🎯 500+ = 5 نقاط | 1,000+ = 10 نقاط | 2,000+ = 20 نقطة
+      </div>
+      <button class="btn-action" id="btn-start">ابدأ اللعب الآن 🚀</button>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="game-over-overlay" class="overlay hidden">
+      <h2>انتهت الجولة! 🏆</h2>
+      <p id="final-score-text">مجموع النقاط: 0</p>
+      <div class="reward-preview" id="final-reward-text">
+        المكافأة المستحقة: 0 نقطة مكافأة 🎁
+      </div>
+      <button class="btn-action" id="btn-submit-score">اعتماد واستلام المكافأة ✨</button>
+      <button class="btn-action" id="btn-play-again" style="margin-top: 8px; background: rgba(255,255,255,0.15); color: #ffffff;">إعادة اللعب 🔄</button>
+    </div>
+  </div>
+
+  <!-- Touch Controls -->
+  <div id="controls">
+    <button class="flipper-btn" id="btn-flip-right">المضرب الأيمن ◀</button>
+    <button class="launch-btn" id="btn-launch">إطلاق 🚀</button>
+    <button class="flipper-btn" id="btn-flip-left">▶ المضرب الأيسر</button>
+  </div>
+
+  <script>
+    // --- Web Audio Synth for Sounds & Music (No Copyright / 100% self-contained) ---
+    let audioCtx = null;
+    let soundEnabled = true;
+    let musicInterval = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSound(type) {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'flipper') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(320, now + 0.08);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'bumper') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, now); // D5
+          osc.frequency.setValueAtTime(880, now + 0.04); // A5
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+          osc.start(now);
+          osc.stop(now + 0.18);
+        } else if (type === 'bonus') {
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.setValueAtTime(659.25, now + 0.06); // E5
+          osc.frequency.setValueAtTime(783.99, now + 0.12); // G5
+          osc.frequency.setValueAtTime(1046.50, now + 0.18); // C6
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'launch') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(200, now);
+          osc.frequency.exponentialRampToValueAtTime(700, now + 0.2);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'loseBall') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(90, now + 0.35);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        }
+      } catch(e) {}
+    }
+
+    function startArcadeBGM() {
+      if (musicInterval) clearInterval(musicInterval);
+      if (!soundEnabled) return;
+      const bassNotes = [110, 110, 130.81, 146.83, 164.81, 146.83, 130.81, 98];
+      let step = 0;
+      musicInterval = setInterval(() => {
+        if (!soundEnabled || !audioCtx || isGameOver || !gameRunning) return;
+        try {
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(bassNotes[step % bassNotes.length], now);
+          gain.gain.setValueAtTime(0.04, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.22);
+          step++;
+        } catch(e) {}
+      }, 250);
+    }
+
+    function stopArcadeBGM() {
+      if (musicInterval) {
+        clearInterval(musicInterval);
+        musicInterval = null;
+      }
+    }
+
+    // --- Pinball Game Physics Engine & State ---
+    const canvas = document.getElementById('pinball-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width = 360;
+    let height = 500;
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let score = 0;
+    let lives = 3;
+    let gameRunning = false;
+    let isGameOver = false;
+    let sessionStartTime = 0;
+    let tapCount = 0;
+    let sessionChallengeToken = 'AZOM_PINBALL_' + Math.random().toString(36).substring(2, 10);
+
+    // Ball physics
+    const ball = {
+      x: width * 0.88,
+      y: height * 0.75,
+      radius: 9,
+      vx: 0,
+      vy: 0,
+      launched: false,
+      color: '#00e5ff'
+    };
+
+    // Flippers
+    const leftFlipper = {
+      pivotX: width * 0.25,
+      pivotY: height * 0.88,
+      length: 54,
+      restAngle: 0.55,
+      activeAngle: -0.45,
+      angle: 0.55,
+      active: false
+    };
+
+    const rightFlipper = {
+      pivotX: width * 0.75,
+      pivotY: height * 0.88,
+      length: 54,
+      restAngle: Math.PI - 0.55,
+      activeAngle: Math.PI + 0.45,
+      angle: Math.PI - 0.55,
+      active: false
+    };
+
+    // Bumpers
+    const bumpers = [
+      { x: width * 0.5, y: height * 0.25, r: 24, pts: 100, color: '#ffb800', hitTimer: 0 },
+      { x: width * 0.3, y: height * 0.4, r: 18, pts: 60, color: '#00e5ff', hitTimer: 0 },
+      { x: width * 0.7, y: height * 0.4, r: 18, pts: 60, color: '#00e5ff', hitTimer: 0 },
+      { x: width * 0.5, y: height * 0.52, r: 20, pts: 80, color: '#ff4757', hitTimer: 0 }
+    ];
+
+    // Neon bonus gems
+    const gems = [
+      { x: width * 0.2, y: height * 0.2, r: 10, pts: 150, active: true },
+      { x: width * 0.8, y: height * 0.2, r: 10, pts: 150, active: true },
+      { x: width * 0.5, y: height * 0.12, r: 12, pts: 250, active: true }
+    ];
+
+    // Particles
+    const particles = [];
+
+    function addParticles(x, y, color, count = 10) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 4;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 2 + Math.random() * 3,
+          color,
+          life: 1
+        });
+      }
+    }
+
+    function calculateRewardPoints(sc) {
+      if (sc < 500) return 0;
+      if (sc < 1000) return 5;
+      if (sc < 2000) return 10;
+      return 20; // 2000+ max tier
+    }
+
+    function updateScore(pts) {
+      score += pts;
+      document.getElementById('score-display').innerText = score.toLocaleString('ar-EG');
+      const reward = calculateRewardPoints(score);
+      document.getElementById('reward-display').innerText = reward + ' نقطة';
+    }
+
+    function updateLivesDisplay() {
+      let str = '';
+      for (let i = 0; i < 3; i++) {
+        str += (i < lives) ? '● ' : '○ ';
+      }
+      document.getElementById('lives-display').innerText = str.trim();
+    }
+
+    function resetBall() {
+      ball.x = width * 0.88;
+      ball.y = height * 0.75;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.launched = false;
+    }
+
+    function launchBall() {
+      if (!gameRunning || isGameOver || ball.launched) return;
+      initAudio();
+      tapCount++;
+      ball.launched = true;
+      ball.vy = -13 - Math.random() * 2;
+      ball.vx = (Math.random() - 0.5) * 4;
+      playSound('launch');
+    }
+
+    function triggerLeftFlipper(active) {
+      if (!gameRunning || isGameOver) return;
+      initAudio();
+      tapCount++;
+      leftFlipper.active = active;
+      if (active) playSound('flipper');
+    }
+
+    function triggerRightFlipper(active) {
+      if (!gameRunning || isGameOver) return;
+      initAudio();
+      tapCount++;
+      rightFlipper.active = active;
+      if (active) playSound('flipper');
+    }
+
+    // --- Game Loop ---
+    function update() {
+      if (!gameRunning || isGameOver) return;
+
+      // Update flippers
+      const targetLeft = leftFlipper.active ? leftFlipper.activeAngle : leftFlipper.restAngle;
+      leftFlipper.angle += (targetLeft - leftFlipper.angle) * 0.35;
+
+      const targetRight = rightFlipper.active ? rightFlipper.activeAngle : rightFlipper.restAngle;
+      rightFlipper.angle += (targetRight - rightFlipper.angle) * 0.35;
+
+      // Ball Physics
+      if (ball.launched) {
+        // Gravity
+        ball.vy += 0.28;
+        // Drag
+        ball.vx *= 0.994;
+        ball.vy *= 0.994;
+
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Wall collisions
+        if (ball.x - ball.radius < 10) {
+          ball.x = 10 + ball.radius;
+          ball.vx = Math.abs(ball.vx) * 0.8;
+          playSound('flipper');
+        }
+        if (ball.x + ball.radius > width - 10) {
+          ball.x = width - 10 - ball.radius;
+          ball.vx = -Math.abs(ball.vx) * 0.8;
+          playSound('flipper');
+        }
+        if (ball.y - ball.radius < 10) {
+          ball.y = 10 + ball.radius;
+          ball.vy = Math.abs(ball.vy) * 0.8;
+          playSound('flipper');
+        }
+
+        // Bumper collisions
+        bumpers.forEach(b => {
+          if (b.hitTimer > 0) b.hitTimer--;
+          const dx = ball.x - b.x;
+          const dy = ball.y - b.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < ball.radius + b.r) {
+            const angle = Math.atan2(dy, dx);
+            const speed = 11;
+            ball.vx = Math.cos(angle) * speed;
+            ball.vy = Math.sin(angle) * speed;
+            ball.x = b.x + Math.cos(angle) * (ball.radius + b.r + 1);
+            ball.y = b.y + Math.sin(angle) * (ball.radius + b.r + 1);
+            b.hitTimer = 10;
+            updateScore(b.pts);
+            addParticles(b.x, b.y, b.color, 12);
+            playSound('bumper');
+          }
+        });
+
+        // Gems collisions
+        gems.forEach(g => {
+          if (g.active) {
+            const dist = Math.hypot(ball.x - g.x, ball.y - g.y);
+            if (dist < ball.radius + g.r) {
+              g.active = false;
+              updateScore(g.pts);
+              addParticles(g.x, g.y, '#ffb800', 16);
+              playSound('bonus');
+              setTimeout(() => { g.active = true; }, 6000);
+            }
+          }
+        });
+
+        // Flipper Collisions (Simplified Segment Bounce)
+        checkFlipperCollision(leftFlipper, true);
+        checkFlipperCollision(rightFlipper, false);
+
+        // Ball drain (lost ball)
+        if (ball.y > height + 20) {
+          lives--;
+          updateLivesDisplay();
+          playSound('loseBall');
+          if (lives > 0) {
+            resetBall();
+          } else {
+            endGame();
+          }
+        }
+      }
+
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.04;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function checkFlipperCollision(flipper, isLeft) {
+      const tipX = flipper.pivotX + Math.cos(flipper.angle) * flipper.length;
+      const tipY = flipper.pivotY + Math.sin(flipper.angle) * flipper.length;
+
+      // Distance to line segment
+      const dx = tipX - flipper.pivotX;
+      const dy = tipY - flipper.pivotY;
+      const l2 = dx * dx + dy * dy;
+      let t = ((ball.x - flipper.pivotX) * dx + (ball.y - flipper.pivotY) * dy) / l2;
+      t = Math.max(0, Math.min(1, t));
+
+      const projX = flipper.pivotX + t * dx;
+      const projY = flipper.pivotY + t * dy;
+      const dist = Math.hypot(ball.x - projX, ball.y - projY);
+
+      if (dist < ball.radius + 6) {
+        // Boost up if flipper is active
+        const flipBoost = flipper.active ? 13 : 8;
+        ball.vy = -flipBoost;
+        ball.vx = isLeft ? 4 + Math.random() * 4 : -4 - Math.random() * 4;
+        ball.y = projY - ball.radius - 2;
+        updateScore(20);
+        addParticles(projX, projY, '#00e5ff', 8);
+        playSound('flipper');
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw guide walls & ramps
+      ctx.strokeStyle = 'rgba(255, 184, 0, 0.25)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(10, 10, width - 20, height - 20);
+
+      // Draw Launcher Track
+      ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+      ctx.beginPath();
+      ctx.moveTo(width * 0.82, height);
+      ctx.lineTo(width * 0.82, height * 0.4);
+      ctx.stroke();
+
+      // Draw Bumpers
+      bumpers.forEach(b => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + (b.hitTimer > 0 ? 3 : 0), 0, Math.PI * 2);
+        ctx.fillStyle = b.hitTimer > 0 ? '#ffffff' : b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = b.hitTimer > 0 ? 25 : 12;
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#0d0f14';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(b.pts, b.x, b.y);
+        ctx.restore();
+      });
+
+      // Draw Gems
+      gems.forEach(g => {
+        if (g.active) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffb800';
+          ctx.shadowColor = '#ffb800';
+          ctx.shadowBlur = 15;
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+
+      // Draw Flippers
+      drawFlipper(leftFlipper);
+      drawFlipper(rightFlipper);
+
+      // Draw Ball
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 16;
+      ctx.fill();
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw Particles
+      particles.forEach(p => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function drawFlipper(f) {
+      const tipX = f.pivotX + Math.cos(f.angle) * f.length;
+      const tipY = f.pivotY + Math.sin(f.angle) * f.length;
+
+      ctx.save();
+      ctx.strokeStyle = f.active ? '#ffb800' : '#00e5ff';
+      ctx.lineWidth = 8;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = f.active ? '#ffb800' : '#00e5ff';
+      ctx.shadowBlur = 10;
+
+      ctx.beginPath();
+      ctx.moveTo(f.pivotX, f.pivotY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+
+    function startGame() {
+      initAudio();
+      score = 0;
+      lives = 3;
+      tapCount = 0;
+      sessionStartTime = Date.now();
+      sessionChallengeToken = 'AZOM_PINBALL_' + Math.random().toString(36).substring(2, 10);
+      gameRunning = true;
+      isGameOver = false;
+      document.getElementById('start-overlay').classList.add('hidden');
+      document.getElementById('game-over-overlay').classList.add('hidden');
+      updateScore(0);
+      updateLivesDisplay();
+      resetBall();
+      startArcadeBGM();
+    }
+
+    function endGame() {
+      gameRunning = false;
+      isGameOver = true;
+      stopArcadeBGM();
+      const reward = calculateRewardPoints(score);
+      document.getElementById('final-score-text').innerText = 'مجموع النقاط: ' + score.toLocaleString('ar-EG');
+      document.getElementById('final-reward-text').innerText = 'المكافأة المستحقة: +' + reward + ' نقطة مكافأة 🎁';
+      document.getElementById('game-over-overlay').classList.remove('hidden');
+    }
+
+    function submitScoreToAndroid() {
+      const durationSec = Math.max(1, Math.floor((Date.now() - sessionStartTime) / 1000));
+      const calculatedPoints = calculateRewardPoints(score);
+
+      // Check for Android Bridge
+      if (window.AndroidGameBridge && typeof window.AndroidGameBridge.onGameFinished === 'function') {
+        window.AndroidGameBridge.onGameFinished(
+          'pinball',
+          score,
+          calculatedPoints,
+          durationSec,
+          tapCount,
+          sessionChallengeToken
+        );
+      } else {
+        alert('تم احتساب النقاط: ' + calculatedPoints + ' نقطة! (النتيجة: ' + score + ')');
+      }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById('btn-start').addEventListener('click', startGame);
+    document.getElementById('btn-play-again').addEventListener('click', startGame);
+    document.getElementById('btn-submit-score').addEventListener('click', submitScoreToAndroid);
+
+    document.getElementById('btn-launch').addEventListener('touchstart', (e) => { e.preventDefault(); launchBall(); });
+    document.getElementById('btn-launch').addEventListener('mousedown', launchBall);
+
+    const btnFlipLeft = document.getElementById('btn-flip-left');
+    btnFlipLeft.addEventListener('touchstart', (e) => { e.preventDefault(); triggerLeftFlipper(true); });
+    btnFlipLeft.addEventListener('touchend', (e) => { e.preventDefault(); triggerLeftFlipper(false); });
+    btnFlipLeft.addEventListener('mousedown', () => triggerLeftFlipper(true));
+    btnFlipLeft.addEventListener('mouseup', () => triggerLeftFlipper(false));
+
+    const btnFlipRight = document.getElementById('btn-flip-right');
+    btnFlipRight.addEventListener('touchstart', (e) => { e.preventDefault(); triggerRightFlipper(true); });
+    btnFlipRight.addEventListener('touchend', (e) => { e.preventDefault(); triggerRightFlipper(false); });
+    btnFlipRight.addEventListener('mousedown', () => triggerRightFlipper(true));
+    btnFlipRight.addEventListener('mouseup', () => triggerRightFlipper(false));
+
+    // Tap on canvas to trigger nearest flipper / launch
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const touchX = touch.clientX - rect.left;
+      if (!ball.launched) {
+        launchBall();
+      } else if (touchX < width / 2) {
+        triggerLeftFlipper(true);
+        setTimeout(() => triggerLeftFlipper(false), 120);
+      } else {
+        triggerRightFlipper(true);
+        setTimeout(() => triggerRightFlipper(false), 120);
+      }
+    });
+
+    document.getElementById('btn-sound-toggle').addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      document.getElementById('btn-sound-toggle').innerText = soundEnabled ? '🔊 صوت' : '🔇 صامت';
+      if (!soundEnabled) stopArcadeBGM();
+      else if (gameRunning) startArcadeBGM();
+    });
+  </script>
+</body>
+</html>

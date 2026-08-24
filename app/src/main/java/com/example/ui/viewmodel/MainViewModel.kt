@@ -76,6 +76,21 @@ class MainViewModel(
         SharingStarted.Eagerly,
         emptyList()
     )
+    val miniGames: StateFlow<List<MiniGameItem>> = rewardRepo.miniGamesFlow.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LocalMockDataSource.miniGames
+    )
+    val economyConfig: StateFlow<RewardEconomyConfig> = rewardRepo.economyConfigFlow.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LocalMockDataSource.defaultEconomyConfig
+    )
+    val dailyGamePointsEarned: StateFlow<Int> = rewardRepo.dailyGamePointsEarnedFlow.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        0
+    )
     val communityPosts: StateFlow<List<CommunityPost>> = communityRepo.postsFlow.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -124,6 +139,12 @@ class MainViewModel(
 
     private val _playerSearchResults = MutableStateFlow<List<PlayerSearchResult>>(emptyList())
     val playerSearchResults = _playerSearchResults.asStateFlow()
+
+    private val _activePlayingMiniGame = MutableStateFlow<MiniGameItem?>(null)
+    val activePlayingMiniGame = _activePlayingMiniGame.asStateFlow()
+
+    private val _lastGameRewardResult = MutableStateFlow<GameRewardResult?>(null)
+    val lastGameRewardResult = _lastGameRewardResult.asStateFlow()
 
     init {
         loadLeaderboard(RankingScope.GLOBAL)
@@ -299,6 +320,47 @@ class MainViewModel(
                     showMessage(err.message ?: "فشل استبدال المكافأة", isError = true)
                 }
             )
+        }
+    }
+
+    // --- HTML5 Mini-Games & Reward Economy Actions ---
+    fun playMiniGame(game: MiniGameItem) {
+        _activePlayingMiniGame.value = game
+        _lastGameRewardResult.value = null
+    }
+
+    fun closeMiniGame() {
+        _activePlayingMiniGame.value = null
+    }
+
+    fun submitMiniGameSession(submission: GameSessionSubmission, watchedMultiplierAd: Boolean) {
+        viewModelScope.launch {
+            val result = rewardRepo.validateAndClaimGameReward(submission, watchedMultiplierAd)
+            result.fold(
+                onSuccess = { rewardRes ->
+                    _lastGameRewardResult.value = rewardRes
+                    if (rewardRes.totalPointsAwarded > 0 || rewardRes.totalXpAwarded > 0) {
+                        userRepo.addXpAndPoints(rewardRes.totalXpAwarded, rewardRes.totalPointsAwarded)
+                    }
+                    showMessage(rewardRes.message, isError = false)
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل اعتماد مكافأة جولة اللعبة", isError = true)
+                }
+            )
+        }
+    }
+
+    fun watchAdForMiniGameMultiplier(submission: GameSessionSubmission) {
+        viewModelScope.launch {
+            _isWatchingAd.value = true
+            _adCountdown.value = 5
+            for (i in 5 downTo 1) {
+                _adCountdown.value = i
+                delay(1000)
+            }
+            _isWatchingAd.value = false
+            submitMiniGameSession(submission, watchedMultiplierAd = true)
         }
     }
 

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تحدي سرعة الاستجابة - Cyber Reflex</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body {
+      background-color: #0d0f14;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      width: 100vw;
+      padding: 8px;
+    }
+    #header {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(21, 25, 34, 0.9);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 12px;
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .stat-box { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { font-size: 10px; color: #94a3b8; }
+    .stat-val { font-weight: 900; color: #00e5ff; font-size: 16px; }
+    #grid-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      max-width: 440px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 10px;
+      padding: 10px;
+      margin: 6px 0;
+    }
+    .grid-cell {
+      background: #151922;
+      border: 2px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      transition: all 0.08s;
+      position: relative;
+    }
+    .grid-cell.active-gold {
+      background: radial-gradient(circle, #ffb800 0%, #e68a00 100%);
+      border-color: #ffe082;
+      box-shadow: 0 0 25px rgba(255, 184, 0, 0.8);
+      transform: scale(0.96);
+    }
+    .grid-cell.active-cyan {
+      background: radial-gradient(circle, #00e5ff 0%, #0088cc 100%);
+      border-color: #80f0ff;
+      box-shadow: 0 0 25px rgba(0, 229, 255, 0.8);
+      transform: scale(0.96);
+    }
+    .grid-cell.active-red {
+      background: radial-gradient(circle, #ff4757 0%, #c0392b 100%);
+      border-color: #ff8080;
+      box-shadow: 0 0 25px rgba(255, 71, 87, 0.8);
+      transform: scale(0.96);
+    }
+    .overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(13, 15, 20, 0.92);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+      z-index: 10;
+    }
+    .overlay.hidden { display: none; }
+    .overlay h2 { font-size: 24px; color: #00e5ff; margin-bottom: 8px; font-weight: 900; }
+    .overlay p { font-size: 13px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.5; }
+    .reward-preview {
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px dashed #00e5ff;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      color: #80f0ff;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .btn-action {
+      background: linear-gradient(90deg, #00e5ff, #0088cc);
+      border: none;
+      color: #0d0f14;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 12px 28px;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div class="stat-box">
+      <span class="stat-label">النقاط</span>
+      <span class="stat-val" id="score-display">0</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">الوقت المتبقي</span>
+      <span class="stat-val" id="timer-display" style="color: #ffb800;">30s</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">المكافأة</span>
+      <span class="stat-val" id="reward-display" style="color: #00e5ff;">0 نقطة</span>
+    </div>
+  </div>
+
+  <div id="grid-container">
+    <div class="grid-cell" data-index="0"></div>
+    <div class="grid-cell" data-index="1"></div>
+    <div class="grid-cell" data-index="2"></div>
+    <div class="grid-cell" data-index="3"></div>
+    <div class="grid-cell" data-index="4"></div>
+    <div class="grid-cell" data-index="5"></div>
+    <div class="grid-cell" data-index="6"></div>
+    <div class="grid-cell" data-index="7"></div>
+    <div class="grid-cell" data-index="8"></div>
+
+    <div id="start-overlay" class="overlay">
+      <h2>تحدي النقر السيبراني ⚡</h2>
+      <p>المس الأهداف المضيئة بسرعة قبل أن تختفي! تجنب الأهداف الحمراء واجمع أعلى نقاط.</p>
+      <div class="reward-preview">
+        🎯 500+ = 5 نقاط | 1,000+ = 10 نقاط | 2,000+ = 20 نقطة
+      </div>
+      <button class="btn-action" id="btn-start">ابدأ التحدي ⚡</button>
+    </div>
+
+    <div id="game-over-overlay" class="overlay hidden">
+      <h2>انتهى الوقت! ⚡</h2>
+      <p id="final-score-text">النتيجة: 0</p>
+      <div class="reward-preview" id="final-reward-text">المكافأة المستحقة: 0 نقطة</div>
+      <button class="btn-action" id="btn-submit-score">اعتماد واستلام المكافأة ✨</button>
+      <button class="btn-action" id="btn-play-again" style="margin-top: 8px; background: rgba(255,255,255,0.15); color: #fff;">إعادة المحاولة 🔄</button>
+    </div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playTone(freq, duration = 0.1, type = 'sine') {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    let score = 0;
+    let timeLeft = 30;
+    let timerInterval = null;
+    let spawnInterval = null;
+    let gameActive = false;
+    let startTime = 0;
+    let tapCount = 0;
+    let sessionToken = 'AZOM_REFLEX_' + Math.random().toString(36).substring(2, 10);
+
+    const cells = document.querySelectorAll('.grid-cell');
+    let activeCell = -1;
+    let activeType = '';
+
+    function calculateReward(sc) {
+      if (sc < 500) return 0;
+      if (sc < 1000) return 5;
+      if (sc < 2000) return 10;
+      return 20;
+    }
+
+    function spawnTarget() {
+      if (!gameActive) return;
+      cells.forEach(c => {
+        c.className = 'grid-cell';
+        c.innerText = '';
+      });
+
+      activeCell = Math.floor(Math.random() * 9);
+      const rand = Math.random();
+      if (rand < 0.65) {
+        activeType = 'cyan';
+        cells[activeCell].classList.add('active-cyan');
+        cells[activeCell].innerText = '⚡';
+      } else if (rand < 0.85) {
+        activeType = 'gold';
+        cells[activeCell].classList.add('active-gold');
+        cells[activeCell].innerText = '⭐';
+      } else {
+        activeType = 'red';
+        cells[activeCell].classList.add('active-red');
+        cells[activeCell].innerText = '💀';
+      }
+    }
+
+    cells.forEach((cell, idx) => {
+      const handleTap = (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        initAudio();
+        tapCount++;
+        if (idx === activeCell) {
+          if (activeType === 'cyan') {
+            score += 100;
+            playTone(880, 0.08, 'sine');
+          } else if (activeType === 'gold') {
+            score += 250;
+            playTone(1200, 0.15, 'square');
+          } else if (activeType === 'red') {
+            score = Math.max(0, score - 200);
+            playTone(200, 0.2, 'sawtooth');
+          }
+          cell.className = 'grid-cell';
+          cell.innerText = '';
+          activeCell = -1;
+          document.getElementById('score-display').innerText = score.toLocaleString('ar-EG');
+          document.getElementById('reward-display').innerText = calculateReward(score) + ' نقطة';
+          spawnTarget();
+        } else {
+          score = Math.max(0, score - 20);
+          playTone(150, 0.05, 'sawtooth');
+          document.getElementById('score-display').innerText = score.toLocaleString('ar-EG');
+        }
+      };
+      cell.addEventListener('touchstart', handleTap);
+      cell.addEventListener('mousedown', handleTap);
+    });
+
+    function startGame() {
+      initAudio();
+      score = 0;
+      timeLeft = 30;
+      tapCount = 0;
+      startTime = Date.now();
+      sessionToken = 'AZOM_REFLEX_' + Math.random().toString(36).substring(2, 10);
+      gameActive = true;
+      document.getElementById('start-overlay').classList.add('hidden');
+      document.getElementById('game-over-overlay').classList.add('hidden');
+      document.getElementById('score-display').innerText = '0';
+      document.getElementById('reward-display').innerText = '0 نقطة';
+
+      spawnTarget();
+      spawnInterval = setInterval(spawnTarget, 900);
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer-display').innerText = timeLeft + 's';
+        if (timeLeft <= 0) {
+          endGame();
+        }
+      }, 1000);
+    }
+
+    function endGame() {
+      gameActive = false;
+      clearInterval(timerInterval);
+      clearInterval(spawnInterval);
+      cells.forEach(c => { c.className = 'grid-cell'; c.innerText = ''; });
+      const pts = calculateReward(score);
+      document.getElementById('final-score-text').innerText = 'مجموع النقاط: ' + score.toLocaleString('ar-EG');
+      document.getElementById('final-reward-text').innerText = 'المكافأة المستحقة: +' + pts + ' نقطة مكافأة 🎁';
+      document.getElementById('game-over-overlay').classList.remove('hidden');
+    }
+
+    function submitScore() {
+      const dur = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+      const pts = calculateReward(score);
+      if (window.AndroidGameBridge && typeof window.AndroidGameBridge.onGameFinished === 'function') {
+        window.AndroidGameBridge.onGameFinished('reflex', score, pts, dur, tapCount, sessionToken);
+      } else {
+        alert('تم احتساب النقاط: ' + pts + ' نقطة!');
+      }
+    }
+
+    document.getElementById('btn-start').addEventListener('click', startGame);
+    document.getElementById('btn-play-again').addEventListener('click', startGame);
+    document.getElementById('btn-submit-score').addEventListener('click', submitScore);
+  </script>
+</body>
+</html>

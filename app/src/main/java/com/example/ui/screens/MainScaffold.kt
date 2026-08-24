@@ -36,7 +36,6 @@ enum class NavigationTab(
 val BottomNavTabs = listOf(
     NavigationTab.HOME,
     NavigationTab.TOURNAMENTS,
-    NavigationTab.WALLET,
     NavigationTab.COMMUNITY,
     NavigationTab.REWARDS,
     NavigationTab.PROFILE
@@ -71,6 +70,11 @@ fun MainScaffold(
     val selectedRankingScope by viewModel.selectedRankingScope.collectAsStateWithLifecycle()
     val currentLeaderboard by viewModel.currentLeaderboard.collectAsStateWithLifecycle()
     val playerSearchResults by viewModel.playerSearchResults.collectAsStateWithLifecycle()
+    val miniGames by viewModel.miniGames.collectAsStateWithLifecycle()
+    val economyConfig by viewModel.economyConfig.collectAsStateWithLifecycle()
+    val dailyGamePointsEarned by viewModel.dailyGamePointsEarned.collectAsStateWithLifecycle()
+    val activePlayingMiniGame by viewModel.activePlayingMiniGame.collectAsStateWithLifecycle()
+    val lastGameRewardResult by viewModel.lastGameRewardResult.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
@@ -237,11 +241,20 @@ fun MainScaffold(
                         rewardItems = rewardItems,
                         earnOpportunities = earnOpportunities,
                         redeemedVouchers = redeemedVouchers,
+                        miniGames = miniGames,
+                        dailyGamePointsEarned = dailyGamePointsEarned,
+                        economyConfig = economyConfig,
+                        activePlayingGame = activePlayingMiniGame,
+                        lastGameRewardResult = lastGameRewardResult,
                         isWatchingAd = isWatchingAd,
                         adCountdown = adCountdown,
                         onClaimOpportunity = { viewModel.claimDailyReward(it) },
                         onWatchAd = { viewModel.startWatchingRewardedAd(it) },
-                        onRedeemReward = { viewModel.redeemReward(it) }
+                        onRedeemReward = { viewModel.redeemReward(it) },
+                        onPlayGame = { viewModel.playMiniGame(it) },
+                        onCloseGame = { viewModel.closeMiniGame() },
+                        onSubmitGameSession = { sub, adWatched -> viewModel.submitMiniGameSession(sub, adWatched) },
+                        onWatchAdForGameMultiplier = { viewModel.watchAdForMiniGameMultiplier(it) }
                     )
                 }
                 NavigationTab.PROFILE -> {
