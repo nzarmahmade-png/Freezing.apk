@@ -22,7 +22,8 @@ class MainViewModel(
     private val communityRepo: ICommunityRepository = CommunityRepository(),
     private val userRepo: IUserRepository = UserRepository(),
     private val rankingsRepo: IRankingsRepository = RankingsRepository(),
-    private val notifRepo: INotificationRepository = NotificationRepository()
+    private val notifRepo: INotificationRepository = NotificationRepository(),
+    private val chatRepo: IChatRepository = ChatRepository()
 ) : ViewModel() {
 
     // Global Flows
@@ -107,6 +108,18 @@ class MainViewModel(
         LocalMockDataSource.notifications
     )
 
+    // Chat Flows
+    val conversations: StateFlow<List<ChatConversation>> = chatRepo.conversationsFlow.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        emptyList()
+    )
+    val messagesMap: StateFlow<Map<String, List<ChatMessage>>> = chatRepo.messagesFlow.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        emptyMap()
+    )
+
     val supportedGames = LocalMockDataSource.supportedGames
 
     // UI State
@@ -119,51 +132,58 @@ class MainViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    private val _selectedTournament = MutableStateFlow<Tournament?>(null)
-    val selectedTournament = _selectedTournament.asStateFlow()
+    private val _communitySearchQuery = MutableStateFlow("")
+    val communitySearchQuery = _communitySearchQuery.asStateFlow()
 
-    private val _uiMessage = MutableStateFlow<UiMessage?>(null)
-    val uiMessage = _uiMessage.asStateFlow()
-
-    private val _isWatchingAd = MutableStateFlow(false)
-    val isWatchingAd = _isWatchingAd.asStateFlow()
-
-    private val _adCountdown = MutableStateFlow(5)
-    val adCountdown = _adCountdown.asStateFlow()
-
-    private val _selectedRankingScope = MutableStateFlow(RankingScope.GLOBAL)
+    private val _selectedRankingScope = MutableStateFlow<RankingScope>(RankingScope.REGIONAL_DARFUR)
     val selectedRankingScope = _selectedRankingScope.asStateFlow()
 
-    private val _currentLeaderboard = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
+    private val _currentLeaderboard = MutableStateFlow<List<LeaderboardEntry>>(LocalMockDataSource.currentSeason.topLeaderboard)
     val currentLeaderboard = _currentLeaderboard.asStateFlow()
 
-    private val _playerSearchResults = MutableStateFlow<List<PlayerSearchResult>>(emptyList())
-    val playerSearchResults = _playerSearchResults.asStateFlow()
-
-    private val _activePlayingMiniGame = MutableStateFlow<MiniGameItem?>(null)
-    val activePlayingMiniGame = _activePlayingMiniGame.asStateFlow()
+    private val _activeMiniGame = MutableStateFlow<MiniGameItem?>(null)
+    val activeMiniGame = _activeMiniGame.asStateFlow()
 
     private val _lastGameRewardResult = MutableStateFlow<GameRewardResult?>(null)
     val lastGameRewardResult = _lastGameRewardResult.asStateFlow()
 
-    init {
-        loadLeaderboard(RankingScope.GLOBAL)
-        searchPlayers("")
+    private val _isWatchingAd = MutableStateFlow(false)
+    val isWatchingAd = _isWatchingAd.asStateFlow()
+
+    private val _adCountdown = MutableStateFlow(0)
+    val adCountdown = _adCountdown.asStateFlow()
+
+    private val _activeConversation = MutableStateFlow<ChatConversation?>(null)
+    val activeConversation = _activeConversation.asStateFlow()
+
+    private val _showChatSheet = MutableStateFlow(false)
+    val showChatSheet = _showChatSheet.asStateFlow()
+
+    private val _uiMessages = MutableStateFlow<List<UiMessage>>(emptyList())
+    val uiMessages = _uiMessages.asStateFlow()
+
+    private val _playerSearchResults = MutableStateFlow<List<PlayerSearchResult>>(emptyList())
+    val playerSearchResults = _playerSearchResults.asStateFlow()
+
+    fun showMessage(msg: String, isError: Boolean = false) {
+        val item = UiMessage(message = msg, isError = isError)
+        _uiMessages.value = _uiMessages.value + item
+        viewModelScope.launch {
+            delay(3500)
+            _uiMessages.value = _uiMessages.value.filter { it.id != item.id }
+        }
     }
 
-    fun showMessage(message: String, isError: Boolean = false) {
-        _uiMessage.value = UiMessage(message = message, isError = isError)
+    fun dismissMessage(id: String) {
+        _uiMessages.value = _uiMessages.value.filter { it.id != id }
     }
 
-    fun dismissMessage() {
-        _uiMessage.value = null
+    // --- Filter & Search ---
+    fun selectGameFilter(game: GameType) {
+        _selectedGameFilter.value = game
     }
 
-    fun setGameFilter(gameType: GameType) {
-        _selectedGameFilter.value = gameType
-    }
-
-    fun setTournamentStatusFilter(status: TournamentStatus?) {
+    fun selectTournamentStatus(status: TournamentStatus?) {
         _selectedTournamentStatus.value = status
     }
 
@@ -171,75 +191,113 @@ class MainViewModel(
         _searchQuery.value = query
     }
 
-    fun selectTournament(tournament: Tournament?) {
-        _selectedTournament.value = tournament
+    fun setCommunitySearchQuery(query: String) {
+        _communitySearchQuery.value = query
     }
 
     // --- Tournament Actions ---
-    fun registerForTournament(tournament: Tournament, usePoints: Boolean = false) {
+    fun registerTournament(
+        tournament: Tournament,
+        useRewardPoints: Boolean = false
+    ) {
         viewModelScope.launch {
-            val user = currentUser.first()
-            val gameProfile = user.gameProfiles[tournament.gameType.id]
-            val inGameId = gameProfile?.inGameId ?: "ID-FF-${user.username}"
+            val user = currentUser.value
+            val userGameProfile = user.gameProfiles[tournament.gameType.id]
 
-            // Pay Entry Fee
-            val feeSDG = if (usePoints) 0L else tournament.entryFeeSDG
-            val payResult = walletRepo.payTournamentEntryFee(tournament.id, tournament.title, feeSDG)
+            if (userGameProfile == null || userGameProfile.inGameId.isBlank()) {
+                showMessage("يرجى إدخال وتأكيد معرّف اللعبة في ملفك الشخصي قبل التسجيل", isError = true)
+                return@launch
+            }
 
-            payResult.fold(
+            // Fee deduction
+            if (useRewardPoints) {
+                if (user.rewardPoints < tournament.entryFeePoints) {
+                    showMessage("نقاط المكافآت غير كافية للاشتراك", isError = true)
+                    return@launch
+                }
+            } else {
+                if (user.depositBalanceSDG < tournament.entryFeeSDG) {
+                    showMessage("رصيد الإيداع غير كافٍ. يرجى شحن محفظتك بـ ${tournament.entryFeeSDG} ج.س", isError = true)
+                    return@launch
+                }
+                // Deduct from Deposit Balance strictly
+                walletRepo.payTournamentEntryFee(tournament.id, tournament.title, tournament.entryFeeSDG)
+            }
+
+            val result = tournamentRepo.registerForTournament(
+                tournamentId = tournament.id,
+                userId = user.id,
+                username = user.username,
+                gameId = userGameProfile.inGameId,
+                teamName = if (tournament.format != TournamentFormat.SOLO) user.currentTeamName else null
+            )
+
+            result.fold(
                 onSuccess = {
-                    val regResult = tournamentRepo.registerForTournament(
-                        tournamentId = tournament.id,
-                        userId = user.id,
-                        username = user.username,
-                        gameId = inGameId,
-                        teamName = user.currentTeamName
+                    userRepo.addXpAndPoints(150, 50)
+                    notifRepo.addNotification(
+                        title = "تأكيد تسجيل في ${tournament.title}",
+                        message = "تم حجز مقعدك بنجاح! موعد الانطلاق: ${tournament.startDateArabic} - ${tournament.startTimeArabic}",
+                        type = NotificationType.TOURNAMENT,
+                        targetId = tournament.id
                     )
-
-                    regResult.fold(
-                        onSuccess = { updatedTourney ->
-                            _selectedTournament.value = updatedTourney
-                            // Award XP for joining
-                            userRepo.addXpAndPoints(150, 20)
-                            notifRepo.addNotification(
-                                title = "🎮 تم تأكيد اشتراكك في ${tournament.title}",
-                                message = "تم حجز مقعدك بنجاح. معرف الروم: ${updatedTourney.customRoomId ?: "سيتم إعلانه قريباً"}",
-                                type = NotificationType.TOURNAMENT,
-                                targetId = tournament.id
-                            )
-                            showMessage("تم التسجيل وحجز مقعدك في البطولة بنجاح! 🎉")
-                        },
-                        onFailure = { err ->
-                            showMessage(err.message ?: "فشل التسجيل في البطولة", isError = true)
-                        }
-                    )
+                    showMessage("تم تأكيد تسجيلك في البطولة بنجاح! 🏆🎮")
                 },
                 onFailure = { err ->
-                    showMessage(err.message ?: "فشل دفع رسوم الاشتراك", isError = true)
+                    showMessage(err.message ?: "فشل التسجيل في البطولة", isError = true)
+                }
+            )
+        }
+    }
+
+    fun submitMatchResult(tournamentId: String, matchId: String, team1Score: Int, team2Score: Int, proofUrl: String?) {
+        viewModelScope.launch {
+            val result = tournamentRepo.submitMatchResult(tournamentId, matchId, team1Score, team2Score, proofUrl)
+            result.fold(
+                onSuccess = {
+                    showMessage("تم إرسال نتيجة المباراة ولقطة الشاشة بنجاح! النتيجة قيد مراجعة الإدارة والاعتماد 📋")
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل رفع النتيجة", isError = true)
+                }
+            )
+        }
+    }
+
+    fun disputeMatch(tournamentId: String, matchId: String, reason: String) {
+        viewModelScope.launch {
+            val result = tournamentRepo.disputeMatch(tournamentId, matchId, reason)
+            result.fold(
+                onSuccess = {
+                    showMessage("تم تقديم الاعتراض الرسمي لإدارة الحكام وسيتم الرد خلال ساعة ⚠️")
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل تقديم الاعتراض", isError = true)
                 }
             )
         }
     }
 
     // --- Wallet Actions ---
-    fun deposit(amountSDG: Long, paymentMethod: PaymentMethod, refCode: String, phoneOrAccount: String) {
+    fun depositFunds(amountSDG: Long, method: PaymentMethod, reference: String, senderPhone: String = "") {
         viewModelScope.launch {
             val request = DepositRequest(
                 amountSDG = amountSDG,
-                paymentMethod = paymentMethod,
-                senderPhoneNumberOrAccount = phoneOrAccount,
-                transactionRefCode = refCode
+                paymentMethod = method,
+                senderPhoneNumberOrAccount = senderPhone,
+                transactionRefCode = reference
             )
             val result = walletRepo.depositFunds(request)
             result.fold(
                 onSuccess = { tx ->
+                    userRepo.addXpAndPoints(50, 20)
                     notifRepo.addNotification(
-                        title = "✅ تم استلام إيداعك بنجاح",
-                        message = "تمت إضافة $amountSDG جنيه سوداني إلى رصيد الإيداع عبر ${paymentMethod.titleArabic}.",
+                        title = "إيداع رصيد ناجح",
+                        message = "تمت إضافة %,d ج.س إلى رصيد الإيداع لدخول البطولات.".format(amountSDG),
                         type = NotificationType.DEPOSIT,
                         targetId = tx.id
                     )
-                    showMessage("تم شحن رصيد الإيداع بمبلغ $amountSDG ج.س بنجاح!")
+                    showMessage("تم شحن رصيد الإيداع بنجاح: %,d ج.س ✅".format(amountSDG))
                 },
                 onFailure = { err ->
                     showMessage(err.message ?: "فشل عملية الإيداع", isError = true)
@@ -248,24 +306,24 @@ class MainViewModel(
         }
     }
 
-    fun requestWithdrawal(amountSDG: Long, method: PaymentMethod, account: String, recipientName: String) {
+    fun requestWithdrawal(amountSDG: Long, method: PaymentMethod, accountDetails: String, recipientName: String = "") {
         viewModelScope.launch {
             val request = WithdrawalRequest(
                 amountSDG = amountSDG,
                 payoutMethod = method,
-                recipientName = recipientName,
-                accountNumberOrPhone = account
+                accountNumberOrPhone = accountDetails,
+                recipientName = recipientName.ifBlank { currentUser.value.fullName }
             )
             val result = walletRepo.requestWithdrawal(request)
             result.fold(
                 onSuccess = { tx ->
                     notifRepo.addNotification(
-                        title = "⏳ طلب سحب أرباح قيد المراجعة",
-                        message = "تم استلام طلب سحب $amountSDG ج.س إلى حساب $account. سيتم الإيداع خلال ساعات العمل.",
+                        title = "طلب سحب الأرباح",
+                        message = "تم تقديم طلب سحب %,d ج.س إلى حساب %s وهو قيد التحويل.".format(amountSDG, method.titleArabic),
                         type = NotificationType.WITHDRAWAL,
                         targetId = tx.id
                     )
-                    showMessage("تم تقديم طلب سحب $amountSDG ج.س من أرباحك المعتمدة بنجاح!")
+                    showMessage("تم رفع طلب السحب بنجاح! سيتم التحويل لحسابك خلال 30 دقيقة.")
                 },
                 onFailure = { err ->
                     showMessage(err.message ?: "فشل طلب السحب", isError = true)
@@ -274,14 +332,56 @@ class MainViewModel(
         }
     }
 
-    // --- Rewards Actions ---
-    fun claimDailyReward(opportunity: EarnOpportunity) {
+    // --- Rewards & MiniGames ---
+    fun playMiniGame(game: MiniGameItem) {
+        _activeMiniGame.value = game
+    }
+
+    fun closeMiniGame() {
+        _activeMiniGame.value = null
+    }
+
+    fun submitMiniGameSession(submission: GameSessionSubmission, watchedMultiplierAd: Boolean) {
+        viewModelScope.launch {
+            val result = rewardRepo.validateAndClaimGameReward(submission, watchedMultiplierAd)
+            result.fold(
+                onSuccess = { rewardResult ->
+                    _lastGameRewardResult.value = rewardResult
+                    if (rewardResult.totalPointsAwarded > 0) {
+                        userRepo.addXpAndPoints(rewardResult.totalXpAwarded, rewardResult.totalPointsAwarded)
+                        showMessage("🎉 أحرزت سكور ${submission.rawScore} وحصلت على +${rewardResult.totalPointsAwarded} نقطة مكافأة!")
+                    } else {
+                        showMessage("أحرزت سكور ${submission.rawScore}. العب مجدداً لتحقيق سكور أعلى وكسب النقاط!")
+                    }
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "حدث خطأ أثناء احتساب النقاط", isError = true)
+                }
+            )
+            closeMiniGame()
+        }
+    }
+
+    fun watchAdForMiniGameMultiplier(submission: GameSessionSubmission) {
+        viewModelScope.launch {
+            _isWatchingAd.value = true
+            _adCountdown.value = 5
+            while (_adCountdown.value > 0) {
+                delay(1000)
+                _adCountdown.value -= 1
+            }
+            _isWatchingAd.value = false
+            submitMiniGameSession(submission, watchedMultiplierAd = true)
+        }
+    }
+
+    fun claimEarnOpportunity(opportunity: EarnOpportunity) {
         viewModelScope.launch {
             val result = rewardRepo.claimEarnOpportunity(opportunity.id)
             result.fold(
                 onSuccess = { (pts, xp) ->
                     userRepo.addXpAndPoints(xp, pts)
-                    showMessage("مبروك! حصلت على +$pts نقطة مكافأة و +$xp XP 🌟")
+                    showMessage("تم استلام المكافأة: +$pts نقطة و +$xp XP! 🌟")
                 },
                 onFailure = { err ->
                     showMessage(err.message ?: "فشل استلام المكافأة", isError = true)
@@ -294,12 +394,12 @@ class MainViewModel(
         viewModelScope.launch {
             _isWatchingAd.value = true
             _adCountdown.value = 5
-            for (i in 5 downTo 1) {
-                _adCountdown.value = i
+            while (_adCountdown.value > 0) {
                 delay(1000)
+                _adCountdown.value -= 1
             }
             _isWatchingAd.value = false
-            claimDailyReward(opportunity)
+            claimEarnOpportunity(opportunity)
         }
     }
 
@@ -308,13 +408,7 @@ class MainViewModel(
             val result = rewardRepo.redeemReward(rewardItem)
             result.fold(
                 onSuccess = { voucher ->
-                    notifRepo.addNotification(
-                        title = "🎁 كود استبدال المكافأة جاهز",
-                        message = "كود الشحن لـ ${rewardItem.titleArabic}: ${voucher.voucherCode}",
-                        type = NotificationType.REWARD,
-                        targetId = voucher.id
-                    )
-                    showMessage("تم استبدال المكافأة بنجاح! الكود: ${voucher.voucherCode}")
+                    showMessage("تهانينا! تم استبدال '${rewardItem.titleArabic}' بنجاح! كود الشحن: ${voucher.voucherCode}")
                 },
                 onFailure = { err ->
                     showMessage(err.message ?: "فشل استبدال المكافأة", isError = true)
@@ -323,73 +417,50 @@ class MainViewModel(
         }
     }
 
-    // --- HTML5 Mini-Games & Reward Economy Actions ---
-    fun playMiniGame(game: MiniGameItem) {
-        _activePlayingMiniGame.value = game
-        _lastGameRewardResult.value = null
-    }
-
-    fun closeMiniGame() {
-        _activePlayingMiniGame.value = null
-    }
-
-    fun submitMiniGameSession(submission: GameSessionSubmission, watchedMultiplierAd: Boolean) {
-        viewModelScope.launch {
-            val result = rewardRepo.validateAndClaimGameReward(submission, watchedMultiplierAd)
-            result.fold(
-                onSuccess = { rewardRes ->
-                    _lastGameRewardResult.value = rewardRes
-                    if (rewardRes.totalPointsAwarded > 0 || rewardRes.totalXpAwarded > 0) {
-                        userRepo.addXpAndPoints(rewardRes.totalXpAwarded, rewardRes.totalPointsAwarded)
-                    }
-                    showMessage(rewardRes.message, isError = false)
-                },
-                onFailure = { err ->
-                    showMessage(err.message ?: "فشل اعتماد مكافأة جولة اللعبة", isError = true)
-                }
-            )
-        }
-    }
-
-    fun watchAdForMiniGameMultiplier(submission: GameSessionSubmission) {
-        viewModelScope.launch {
-            _isWatchingAd.value = true
-            _adCountdown.value = 5
-            for (i in 5 downTo 1) {
-                _adCountdown.value = i
-                delay(1000)
-            }
-            _isWatchingAd.value = false
-            submitMiniGameSession(submission, watchedMultiplierAd = true)
-        }
-    }
-
     // --- Community Actions ---
     fun createPost(content: String, gameTag: GameType?) {
         viewModelScope.launch {
-            val user = currentUser.first()
+            val user = currentUser.value
             val result = communityRepo.createPost(content, gameTag, user)
             result.fold(
                 onSuccess = {
                     userRepo.addXpAndPoints(50, 10)
-                    showMessage("تم نشر منشورك في مجتمع دارفور بنجاح! ✨")
+                    showMessage("تم نشر منشورك في مجتمع دارفور بنجاح! 🚀")
                 },
                 onFailure = { err ->
-                    showMessage(err.message ?: "فشل نشر المنشور", isError = true)
+                    showMessage(err.message ?: "فشل النشر", isError = true)
                 }
             )
         }
     }
 
-    fun toggleLike(postId: String) {
+    fun toggleLikePost(postId: String) {
         viewModelScope.launch {
             communityRepo.toggleLikePost(postId)
         }
     }
 
+    fun toggleFollowUser(authorId: String) {
+        viewModelScope.launch {
+            val result = communityRepo.toggleFollowUser(authorId)
+            result.fold(
+                onSuccess = { isFollowing ->
+                    if (isFollowing) {
+                        showMessage("أنت الآن تتابع هذا اللاعب ✅")
+                    } else {
+                        showMessage("تم إلغاء المتابعة")
+                    }
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل التحديث", isError = true)
+                }
+            )
+        }
+    }
+
     fun addComment(postId: String, content: String) {
         viewModelScope.launch {
-            val user = currentUser.first()
+            val user = currentUser.value
             val result = communityRepo.addComment(postId, content, user)
             result.fold(
                 onSuccess = {
@@ -420,6 +491,61 @@ class MainViewModel(
     fun searchPlayers(query: String) {
         viewModelScope.launch {
             _playerSearchResults.value = communityRepo.searchPlayers(query)
+        }
+    }
+
+    // --- Chat & Messaging ---
+    fun openChat(conversation: ChatConversation? = null) {
+        _activeConversation.value = conversation
+        _showChatSheet.value = true
+    }
+
+    fun closeChat() {
+        _showChatSheet.value = false
+        _activeConversation.value = null
+    }
+
+    fun selectConversation(conv: ChatConversation) {
+        if (_activeConversation.value?.id == conv.id) {
+            _activeConversation.value = null
+        } else {
+            _activeConversation.value = conv
+        }
+    }
+
+    fun openDirectChatWithPlayer(playerId: String, playerName: String, gameType: GameType) {
+        viewModelScope.launch {
+            val conv = chatRepo.getOrCreateConversation(playerId, playerName, gameType)
+            _activeConversation.value = conv
+            _showChatSheet.value = true
+        }
+    }
+
+    fun sendMessage(text: String, timer: DisappearingTimer, isVoice: Boolean) {
+        val active = _activeConversation.value ?: return
+        viewModelScope.launch {
+            chatRepo.sendMessage(
+                conversationId = active.id,
+                text = text,
+                disappearingTimer = timer,
+                isVoiceNote = isVoice,
+                voiceDurationSec = if (isVoice) 4 else 0
+            )
+        }
+    }
+
+    fun setChatTimer(timer: DisappearingTimer) {
+        val active = _activeConversation.value ?: return
+        viewModelScope.launch {
+            chatRepo.setConversationDisappearingTimer(active.id, timer)
+            showMessage("تم ضبط مؤقت الرسائل ذاتية الاختفاء: ${timer.titleArabic}")
+        }
+    }
+
+    fun markViewOnceMessage(msgId: String) {
+        val active = _activeConversation.value ?: return
+        viewModelScope.launch {
+            chatRepo.markViewOnceAsViewed(active.id, msgId)
         }
     }
 
@@ -460,7 +586,35 @@ class MainViewModel(
         }
     }
 
-    // --- Profile & Game IDs ---
+    // --- Profile & Username Rules ---
+    fun changeUsernameOnce(newUsername: String) {
+        viewModelScope.launch {
+            val result = userRepo.changeUsernameOnce(newUsername)
+            result.fold(
+                onSuccess = { name ->
+                    showMessage("تم تغيير اسم المستخدم الخاص بك إلى '$name' بنجاح! (تم استهلاك فرصة التعديل لمرة واحدة)")
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل تغيير اسم المستخدم", isError = true)
+                }
+            )
+        }
+    }
+
+    fun submitAdminUsernameRequest(desiredUsername: String, reason: String) {
+        viewModelScope.launch {
+            val result = userRepo.submitAdminUsernameRequest(desiredUsername, reason)
+            result.fold(
+                onSuccess = {
+                    showMessage("تم إرسال طلب تغيير اسم المستخدم إلى إدارة المنصة بنجاح وسيتم الرد عليك قريباً! 📨")
+                },
+                onFailure = { err ->
+                    showMessage(err.message ?: "فشل إرسال الطلب", isError = true)
+                }
+            )
+        }
+    }
+
     fun updateGameId(gameType: GameType, inGameId: String, inGameName: String) {
         viewModelScope.launch {
             userRepo.updateGameId(gameType, inGameId, inGameName)

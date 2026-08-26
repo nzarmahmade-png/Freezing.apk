@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.ui.components.GlassCard
 import com.example.ui.components.NeonButton
-import com.example.ui.components.SectionHeader
 import com.example.ui.theme.*
 
 @Composable
@@ -33,19 +32,36 @@ fun CommunityScreen(
     posts: List<CommunityPost>,
     playerSearchResults: List<PlayerSearchResult>,
     onLikePost: (String) -> Unit,
+    onFollowUser: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
     onCreatePost: (String, GameType?) -> Unit,
     onReportPost: (String, String) -> Unit,
     onBlockUser: (String) -> Unit,
     onSearchPlayers: (String) -> Unit,
+    onSearchPosts: (String) -> Unit,
     onInvitePlayerToTeam: (String) -> Unit,
+    onOpenDirectChat: (String, String, GameType) -> Unit,
+    onOpenGeneralChat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Feed (منشورات المجتمع), 1: Search Players (البحث عن لاعبين)
+    var selectedTab by remember { mutableStateOf(0) } // 0: Feed (منشورات المجتمع), 1: Search Players & Teams
     var showCreatePostDialog by remember { mutableStateOf(false) }
     var selectedPostForComments by remember { mutableStateOf<CommunityPost?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    var feedFilterTag by remember { mutableStateOf<String?>(null) }
     var postToReport by remember { mutableStateOf<CommunityPost?>(null) }
+
+    val hashtags = listOf("الكل", "#بطولة_دارفور", "#فري_فاير", "#ببجي_موبايل", "#إي_فوتبول", "#نيالا", "#ذئاب_نيالا")
+
+    val displayedPosts = remember(posts, feedFilterTag, searchQuery) {
+        posts.filter { post ->
+            val matchesTag = if (feedFilterTag == null || feedFilterTag == "الكل") true
+            else post.hashtags.contains(feedFilterTag) || (post.gameTag?.titleArabic?.let { "#$it" } == feedFilterTag)
+            val matchesSearch = if (searchQuery.isBlank() || selectedTab != 0) true
+            else post.content.contains(searchQuery, ignoreCase = true) || post.authorName.contains(searchQuery, ignoreCase = true)
+            matchesTag && matchesSearch
+        }
+    }
 
     Column(
         modifier = modifier
@@ -74,32 +90,53 @@ fun CommunityScreen(
                         )
                     )
                     Text(
-                        text = "تواصل مع لاعبي نيالا ودارفور وكون فريقك",
+                        text = "المجتمع الموحد لجميع الألعاب واللاعبين في دارفور",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
                     )
                 }
 
-                IconButton(
-                    onClick = { showCreatePostDialog = true },
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(NeonGold)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "إنشاء منشور",
-                        tint = TextOnAccent
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Open Messages / Chat FAB
+                    IconButton(
+                        onClick = onOpenGeneralChat,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(ObsidianCardElevated)
+                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = "الرسائل الخاصة",
+                            tint = NeonCyanLight,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Create Post Button
+                    IconButton(
+                        onClick = { showCreatePostDialog = true },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(NeonCyan)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "إنشاء منشور",
+                            tint = Color.Black,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = ObsidianCard,
-                contentColor = NeonGold,
+                contentColor = NeonCyan,
                 divider = {}
             ) {
                 Tab(
@@ -109,7 +146,10 @@ fun CommunityScreen(
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        selectedTab = 1
+                        onSearchPlayers(searchQuery)
+                    },
                     text = { Text("البحث عن لاعبين وفرق", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 )
             }
@@ -119,12 +159,66 @@ fun CommunityScreen(
         if (selectedTab == 0) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 0.dp, top = 8.dp, end = 0.dp, bottom = 90.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 90.dp)
             ) {
-                items(posts) { post ->
+                // Hashtags & Search Row
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("ابحث في المنشورات والهاشتاجات...", color = TextMuted, fontSize = 11.sp) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = ObsidianCard,
+                                unfocusedContainerColor = ObsidianCard,
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = ObsidianBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(hashtags) { tag ->
+                                val isSelected = (feedFilterTag == tag) || (feedFilterTag == null && tag == "الكل")
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) NeonCyan else ObsidianCard,
+                                    modifier = Modifier.clickable {
+                                        feedFilterTag = if (tag == "الكل") null else tag
+                                    }
+                                ) {
+                                    Text(
+                                        text = tag,
+                                        color = if (isSelected) Color.Black else TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                items(displayedPosts) { post ->
                     CommunityPostCard(
                         post = post,
                         onLike = { onLikePost(post.id) },
+                        onFollow = { onFollowUser(post.authorId) },
+                        onMessage = {
+                            onOpenDirectChat(
+                                post.authorId,
+                                post.authorName,
+                                post.gameTag ?: GameType.FREE_FIRE
+                            )
+                        },
                         onCommentClick = { selectedPostForComments = post },
                         onReportClick = { postToReport = post },
                         onBlockUser = { onBlockUser(post.authorId) }
@@ -145,7 +239,7 @@ fun CommunityScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    placeholder = { Text("ابحث بالاسم، المعرف، أو المدينة...", fontSize = 12.sp, color = TextMuted) },
+                    placeholder = { Text("ابحث باسم اللاعب، المعرف (UID)، أو المدينة...", fontSize = 12.sp, color = TextMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -166,7 +260,9 @@ fun CommunityScreen(
                     items(playerSearchResults) { player ->
                         PlayerSearchItemCard(
                             player = player,
-                            onInvite = { onInvitePlayerToTeam(player.username) }
+                            onInvite = { onInvitePlayerToTeam(player.username) },
+                            onFollow = { onFollowUser(player.id) },
+                            onMessage = { onOpenDirectChat(player.id, player.username, player.primaryGame) }
                         )
                     }
                 }
@@ -214,6 +310,8 @@ fun CommunityScreen(
 fun CommunityPostCard(
     post: CommunityPost,
     onLike: () -> Unit,
+    onFollow: () -> Unit,
+    onMessage: () -> Unit,
     onCommentClick: () -> Unit,
     onReportClick: () -> Unit,
     onBlockUser: () -> Unit,
@@ -225,34 +323,69 @@ fun CommunityPostCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        backgroundColor = ObsidianCard,
-        borderColor = ObsidianBorder
+        backgroundColor = if (post.isPinnedByAdmin) ObsidianCardElevated else ObsidianCard,
+        borderColor = if (post.isPinnedByAdmin) NeonGold.copy(alpha = 0.6f) else if (post.isAdvertisement) NeonCyan.copy(alpha = 0.5f) else ObsidianBorder
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp)
         ) {
+            // Pinned Banner or Ad Banner
+            if (post.isPinnedByAdmin) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.PushPin, contentDescription = null, tint = NeonGoldLight, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "منشور مثبت من إدارة المنصة الرسمية 🛡️",
+                        style = MaterialTheme.typography.labelSmall.copy(color = NeonGoldLight, fontWeight = FontWeight.Bold)
+                    )
+                }
+            } else if (post.isAdvertisement) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(NeonCyan.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("إعلان مميز 📢", color = NeonCyanLight, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text("شريك منصة عازم", color = TextMuted, fontSize = 9.sp)
+                }
+            }
+
             // Post Author Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
                             .background(ObsidianCardElevated)
-                            .border(1.dp, NeonGoldLight, CircleShape),
+                            .border(1.dp, if (post.isPinnedByAdmin) NeonGoldLight else NeonCyanLight, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = post.authorName.take(1),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = NeonGoldLight
+                                color = if (post.isPinnedByAdmin) NeonGoldLight else NeonCyanLight
                             )
                         )
                     }
@@ -270,13 +403,13 @@ fun CommunityPostCard(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(NeonGold.copy(alpha = 0.2f))
+                                    .background(if (post.isPinnedByAdmin) NeonGold.copy(alpha = 0.2f) else NeonCyan.copy(alpha = 0.15f))
                                     .padding(horizontal = 4.dp, vertical = 1.dp)
                             ) {
                                 Text(
                                     text = post.authorBadge,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = NeonGoldLight,
+                                        color = if (post.isPinnedByAdmin) NeonGoldLight else NeonCyanLight,
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -293,32 +426,52 @@ fun CommunityPostCard(
                     }
                 }
 
-                // Options Menu (Report & Block)
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "خيارات", tint = TextSecondary)
+                // Follow / Message / Options Buttons
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!post.isAdvertisement && !post.isPinnedByAdmin) {
+                        IconButton(onClick = onMessage, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Send, contentDescription = "مراسلة خاصة", tint = NeonCyanLight, modifier = Modifier.size(16.dp))
+                        }
+
+                        TextButton(
+                            onClick = onFollow,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (post.isFollowingAuthor) "متابع ✓" else "+ متابعة",
+                                color = if (post.isFollowingAuthor) TextMuted else NeonCyanLight,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(ObsidianCardElevated)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("إبلاغ عن المنشور", color = NeonRed, fontSize = 13.sp) },
-                            onClick = {
-                                showMenu = false
-                                onReportClick()
-                            },
-                            leadingIcon = { Icon(Icons.Default.Report, contentDescription = null, tint = NeonRed) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("حظر هذا المستخدم", color = TextSecondary, fontSize = 13.sp) },
-                            onClick = {
-                                showMenu = false
-                                onBlockUser()
-                            },
-                            leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = TextSecondary) }
-                        )
+
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "خيارات", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            modifier = Modifier.background(ObsidianCardElevated)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("إبلاغ عن المنشور", color = NeonRed, fontSize = 13.sp) },
+                                onClick = {
+                                    showMenu = false
+                                    onReportClick()
+                                },
+                                leadingIcon = { Icon(Icons.Default.Report, contentDescription = null, tint = NeonRed) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("حظر هذا المستخدم", color = TextSecondary, fontSize = 13.sp) },
+                                onClick = {
+                                    showMenu = false
+                                    onBlockUser()
+                                },
+                                leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = TextSecondary) }
+                            )
+                        }
                     }
                 }
             }
@@ -415,7 +568,9 @@ fun CommunityPostCard(
 @Composable
 fun PlayerSearchItemCard(
     player: PlayerSearchResult,
-    onInvite: () -> Unit
+    onInvite: () -> Unit,
+    onFollow: () -> Unit,
+    onMessage: () -> Unit
 ) {
     GlassCard(
         modifier = Modifier
@@ -431,7 +586,7 @@ fun PlayerSearchItemCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(
                     modifier = Modifier
                         .size(42.dp)
@@ -449,29 +604,51 @@ fun PlayerSearchItemCard(
                         )
                     )
                 }
-                Spacer(modifier = Modifier.width(10.dp))
+
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Column {
                     Text(
-                        text = player.username,
+                        text = player.fullName,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                     )
                     Text(
-                        text = "${player.location} • ID: ${player.inGameId} • فوز ${player.winRate}%",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 11.sp)
+                        text = "@${player.username} • UID: ${player.inGameId}",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = NeonCyanLight,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Text(
+                        text = "📍 ${player.location} • نسبة الفوز: %.1f%%".format(player.winRate),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = TextMuted,
+                            fontSize = 10.sp
+                        )
                     )
                 }
             }
 
-            Button(
-                onClick = onInvite,
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f)),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text("دعوة للفريق", color = NeonCyanLight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMessage, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Send, contentDescription = "مراسلة", tint = NeonCyanLight, modifier = Modifier.size(16.dp))
+                }
+
+                TextButton(onClick = onFollow) {
+                    Text(
+                        text = if (player.isFollowing) "متابع ✓" else "+ متابعة",
+                        color = if (player.isFollowing) TextMuted else NeonCyanLight,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                IconButton(onClick = onInvite, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.GroupAdd, contentDescription = "دعوة للفريق", tint = NeonGoldLight, modifier = Modifier.size(18.dp))
+                }
             }
         }
     }
@@ -483,28 +660,29 @@ fun CreatePostDialog(
     onSubmit: (String, GameType?) -> Unit
 ) {
     var content by remember { mutableStateOf("") }
-    var selectedGameTag by remember { mutableStateOf<GameType?>(null) }
+    var selectedGame by remember { mutableStateOf<GameType?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ObsidianCard,
         title = {
-            Text("نشر منشور جديد في المجتمع", fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(
+                text = "نشر في مجتمع دارفور ✍️",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+            )
         },
         text = {
-            Column {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    placeholder = { Text("شارك أخبارك، ابحث عن سكواد، أو تحدى الفرق في نيالا ودارفور...", fontSize = 12.sp, color = TextMuted) },
+                    placeholder = { Text("ماذا يدور في ذهنك؟ ابحث عن سكواد، شارك نتائجك، أو تحدى الفرق...", color = TextMuted, fontSize = 12.sp) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = ObsidianCardElevated,
-                        unfocusedContainerColor = ObsidianCardElevated,
-                        focusedBorderColor = NeonGold,
+                        focusedBorderColor = NeonCyan,
                         unfocusedBorderColor = ObsidianBorder,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary
@@ -512,41 +690,42 @@ fun CreatePostDialog(
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
-
-                Text("وسم اللعبة (اختياري):", color = TextSecondary, fontSize = 11.sp)
+                Text("حدد اللعبة المرتبطة (اختياري):", color = TextSecondary, fontSize = 11.sp)
                 Spacer(modifier = Modifier.height(6.dp))
 
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item {
-                        FilterChip(
-                            selected = selectedGameTag == null,
-                            onClick = { selectedGameTag = null },
-                            label = { Text("بدون وسم", fontSize = 11.sp) }
-                        )
-                    }
                     items(listOf(GameType.FREE_FIRE, GameType.PUBG_MOBILE, GameType.EFOOTBALL)) { game ->
-                        FilterChip(
-                            selected = selectedGameTag == game,
-                            onClick = { selectedGameTag = game },
-                            label = { Text(game.titleArabic, fontSize = 11.sp) }
-                        )
+                        val isSelected = selectedGame == game
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isSelected) game.brandColor else ObsidianCardElevated,
+                            modifier = Modifier.clickable {
+                                selectedGame = if (isSelected) null else game
+                            }
+                        ) {
+                            Text(
+                                text = game.titleArabic,
+                                color = if (isSelected) Color.White else TextPrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onSubmit(content, selectedGameTag) },
+                onClick = { onSubmit(content, selectedGame) },
                 enabled = content.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonGold, contentColor = TextOnAccent)
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color.Black)
             ) {
                 Text("نشر الآن", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إلغاء", color = TextSecondary)
-            }
+            TextButton(onClick = onDismiss) { Text("إلغاء", color = TextSecondary) }
         }
     )
 }
@@ -559,7 +738,7 @@ fun CommentsSheet(
     onDismiss: () -> Unit,
     onAddComment: (String) -> Unit
 ) {
-    var newCommentText by remember { mutableStateOf("") }
+    var commentText by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -573,54 +752,52 @@ fun CommentsSheet(
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = "التعليقات (${post.commentsCount})",
+                text = "التعليقات (${post.commentsCount}) 💬",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-            ) {
-                if (post.comments.isEmpty()) {
-                    item {
-                        Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                            Text("لا توجد تعليقات بعد. كن أول من يعلق!", color = TextMuted, fontSize = 12.sp)
-                        }
-                    }
-                } else {
+            if (post.comments.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(30.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("لا توجد تعليقات حتى الآن. كن أول من يعلق!", color = TextMuted, fontSize = 12.sp)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .heightIn(max = 280.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(post.comments) { comment ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(ObsidianCardElevated)
-                                .padding(10.dp)
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = ObsidianCard,
+                            borderColor = ObsidianBorder
                         ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
                                         text = comment.authorName,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = NeonCyanLight
-                                        )
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = NeonCyanLight)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = comment.timestamp,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = TextMuted,
-                                            fontSize = 10.sp
-                                        )
+                                        style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 9.sp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = comment.content,
-                                    style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 12.sp)
                                 )
                             }
                         }
@@ -628,7 +805,7 @@ fun CommentsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Add comment input
             Row(
@@ -636,35 +813,37 @@ fun CommentsSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
-                    value = newCommentText,
-                    onValueChange = { newCommentText = it },
-                    placeholder = { Text("اكتب تعليقك هنا...", fontSize = 12.sp, color = TextMuted) },
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    placeholder = { Text("اكتب تعليقك...", fontSize = 11.sp, color = TextMuted) },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = ObsidianCard,
-                        unfocusedContainerColor = ObsidianCard,
-                        focusedBorderColor = NeonGold,
+                        focusedBorderColor = NeonCyan,
                         unfocusedBorderColor = ObsidianBorder,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary
-                    )
+                    ),
+                    singleLine = true
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(
                     onClick = {
-                        if (newCommentText.isNotBlank()) {
-                            onAddComment(newCommentText)
-                            newCommentText = ""
+                        if (commentText.isNotBlank()) {
+                            onAddComment(commentText)
+                            commentText = ""
                         }
                     },
+                    enabled = commentText.isNotBlank(),
                     modifier = Modifier
-                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(NeonGold)
+                        .background(if (commentText.isNotBlank()) NeonCyan else ObsidianCardElevated)
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "إرسال", tint = TextOnAccent)
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "إرسال",
+                        tint = if (commentText.isNotBlank()) Color.Black else TextMuted
+                    )
                 }
             }
         }
@@ -677,35 +856,46 @@ fun ReportPostDialog(
     onDismiss: () -> Unit,
     onSubmitReport: (String) -> Unit
 ) {
-    var reason by remember { mutableStateOf("محتوى غير لائق") }
-    val reasons = listOf("محتوى غير لائق", "سب أو إساءة", "احتيال أو روابط مشبوهة", "غش في الألعاب")
+    var selectedReason by remember { mutableStateOf("محتوى غير لائق أو مسيء") }
+    val reasons = listOf(
+        "محتوى غير لائق أو مسيء",
+        "احتيال أو ترويج لمواقع هكر",
+        "سبام وإعلانات مزعجة",
+        "انتحال شخصية لاعب أو كلان"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ObsidianCard,
-        title = { Text("إبلاغ عن المنشور", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        title = {
+            Text("إبلاغ عن المنشور", fontWeight = FontWeight.Bold, color = TextPrimary)
+        },
         text = {
             Column {
-                Text("اختر سبب البلاغ:", color = TextSecondary, fontSize = 12.sp)
+                Text("حدد سبب الإبلاغ للمشرفين:", color = TextSecondary, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                reasons.forEach { r ->
+                reasons.forEach { reason ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { reason = r }
-                            .padding(vertical = 4.dp),
+                            .clickable { selectedReason = reason }
+                            .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = reason == r, onClick = { reason = r })
+                        RadioButton(
+                            selected = selectedReason == reason,
+                            onClick = { selectedReason = reason },
+                            colors = RadioButtonDefaults.colors(selectedColor = NeonRed)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = r, color = TextPrimary, fontSize = 13.sp)
+                        Text(reason, color = TextPrimary, fontSize = 12.sp)
                     }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onSubmitReport(reason) },
+                onClick = { onSubmitReport(selectedReason) },
                 colors = ButtonDefaults.buttonColors(containerColor = NeonRed, contentColor = Color.White)
             ) {
                 Text("إرسال البلاغ", fontWeight = FontWeight.Bold)

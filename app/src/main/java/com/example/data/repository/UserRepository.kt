@@ -5,6 +5,9 @@ import com.example.data.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 interface IUserRepository {
@@ -16,6 +19,8 @@ interface IUserRepository {
     suspend fun createTeam(name: String, tag: String, primaryGame: GameType, bio: String): Result<Team>
     suspend fun invitePlayerToTeam(usernameOrId: String): Result<TeamMember>
     suspend fun removeTeamMember(userId: String): Result<Unit>
+    suspend fun changeUsernameOnce(newUsername: String): Result<String>
+    suspend fun submitAdminUsernameRequest(desiredUsername: String, reason: String): Result<UsernameChangeRequest>
 }
 
 class UserRepository : IUserRepository {
@@ -55,6 +60,43 @@ class UserRepository : IUserRepository {
             nextLevelXp = nextXp,
             rewardPoints = user.rewardPoints + points
         )
+    }
+
+    override suspend fun changeUsernameOnce(newUsername: String): Result<String> {
+        val user = _currentUser.value
+        if (newUsername.isBlank() || newUsername.length < 3) {
+            return Result.failure(Exception("اسم المستخدم يجب أن يكون 3 أحرف على الأقل"))
+        }
+        if (user.hasChangedUsernameOnce) {
+            return Result.failure(Exception("لقد قمت بتغيير اسم المستخدم لمرة واحدة مسبقاً. يجب تقديم طلب للإدارة."))
+        }
+
+        _currentUser.value = user.copy(
+            username = newUsername.trim(),
+            hasChangedUsernameOnce = true
+        )
+        return Result.success(newUsername.trim())
+    }
+
+    override suspend fun submitAdminUsernameRequest(
+        desiredUsername: String,
+        reason: String
+    ): Result<UsernameChangeRequest> {
+        if (desiredUsername.isBlank() || reason.isBlank()) {
+            return Result.failure(Exception("يرجى كتابة الاسم المطلوب وسبب التغيير"))
+        }
+
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val req = UsernameChangeRequest(
+            requestedUsername = desiredUsername.trim(),
+            reason = reason.trim(),
+            status = "قيد مراجعة الإدارة الرسمية",
+            requestDate = dateFormat.format(Date())
+        )
+
+        val user = _currentUser.value
+        _currentUser.value = user.copy(pendingUsernameRequest = req)
+        return Result.success(req)
     }
 
     override suspend fun createTeam(

@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.*
 import com.example.ui.components.AppTopBar
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
@@ -24,13 +25,12 @@ enum class NavigationTab(
 ) {
     HOME("الرئيسية", Icons.Default.Home, Icons.Outlined.Home),
     TOURNAMENTS("البطولات", Icons.Default.EmojiEvents, Icons.Outlined.EmojiEvents),
-    GAMES("الألعاب", Icons.Default.SportsEsports, Icons.Outlined.SportsEsports),
     COMMUNITY("المجتمع", Icons.Default.Forum, Icons.Outlined.Forum),
-    TEAMS("الفرق", Icons.Default.Groups, Icons.Outlined.Groups),
-    WALLET("المحفظة", Icons.Default.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet),
     REWARDS("المكافآت", Icons.Default.CardGiftcard, Icons.Outlined.CardGiftcard),
     PROFILE("ملفي", Icons.Default.Person, Icons.Outlined.Person),
-    RANKINGS("التصنيف", Icons.Default.Leaderboard, Icons.Outlined.Leaderboard)
+    WALLET("المحفظة", Icons.Default.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet),
+    RANKINGS("التصنيف", Icons.Default.Leaderboard, Icons.Outlined.Leaderboard),
+    TEAMS("الفرق", Icons.Default.Groups, Icons.Outlined.Groups)
 }
 
 val BottomNavTabs = listOf(
@@ -63,32 +63,38 @@ fun MainScaffold(
     val selectedGameFilter by viewModel.selectedGameFilter.collectAsStateWithLifecycle()
     val selectedStatusFilter by viewModel.selectedTournamentStatus.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val selectedTournament by viewModel.selectedTournament.collectAsStateWithLifecycle()
-    val uiMessage by viewModel.uiMessage.collectAsStateWithLifecycle()
-    val isWatchingAd by viewModel.isWatchingAd.collectAsStateWithLifecycle()
-    val adCountdown by viewModel.adCountdown.collectAsStateWithLifecycle()
+    val uiMessages by viewModel.uiMessages.collectAsStateWithLifecycle()
     val selectedRankingScope by viewModel.selectedRankingScope.collectAsStateWithLifecycle()
     val currentLeaderboard by viewModel.currentLeaderboard.collectAsStateWithLifecycle()
     val playerSearchResults by viewModel.playerSearchResults.collectAsStateWithLifecycle()
     val miniGames by viewModel.miniGames.collectAsStateWithLifecycle()
     val economyConfig by viewModel.economyConfig.collectAsStateWithLifecycle()
     val dailyGamePointsEarned by viewModel.dailyGamePointsEarned.collectAsStateWithLifecycle()
-    val activePlayingMiniGame by viewModel.activePlayingMiniGame.collectAsStateWithLifecycle()
+    val activeMiniGame by viewModel.activeMiniGame.collectAsStateWithLifecycle()
     val lastGameRewardResult by viewModel.lastGameRewardResult.collectAsStateWithLifecycle()
+    val isWatchingAd by viewModel.isWatchingAd.collectAsStateWithLifecycle()
+    val adCountdown by viewModel.adCountdown.collectAsStateWithLifecycle()
+
+    // Chat states
+    val conversations by viewModel.conversations.collectAsStateWithLifecycle()
+    val messagesMap by viewModel.messagesMap.collectAsStateWithLifecycle()
+    val activeConversation by viewModel.activeConversation.collectAsStateWithLifecycle()
+    val showChatSheet by viewModel.showChatSheet.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
+    var selectedTournament by remember { mutableStateOf<Tournament?>(null) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
 
     val unreadNotificationsCount = notifications.count { !it.isRead }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(uiMessage) {
-        uiMessage?.let {
+    LaunchedEffect(uiMessages) {
+        val latestMsg = uiMessages.lastOrNull()
+        latestMsg?.let {
             snackbarHostState.showSnackbar(
                 message = it.message,
                 duration = SnackbarDuration.Short
             )
-            viewModel.dismissMessage()
         }
     }
 
@@ -101,7 +107,7 @@ fun MainScaffold(
                     snackbarData = data,
                     containerColor = ObsidianCardElevated,
                     contentColor = TextPrimary,
-                    actionColor = NeonGoldLight
+                    actionColor = NeonCyanLight
                 )
             }
         },
@@ -118,7 +124,7 @@ fun MainScaffold(
         bottomBar = {
             NavigationBar(
                 containerColor = ObsidianSurface,
-                contentColor = NeonGold,
+                contentColor = NeonCyan,
                 tonalElevation = 8.dp
             ) {
                 BottomNavTabs.forEach { tab ->
@@ -142,11 +148,11 @@ fun MainScaffold(
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = NeonGoldLight,
-                            selectedTextColor = NeonGoldLight,
+                            selectedIconColor = NeonCyanLight,
+                            selectedTextColor = NeonCyanLight,
                             unselectedIconColor = TextSecondary,
                             unselectedTextColor = TextSecondary,
-                            indicatorColor = NeonGold.copy(alpha = 0.15f)
+                            indicatorColor = NeonCyan.copy(alpha = 0.15f)
                         )
                     )
                 }
@@ -166,12 +172,12 @@ fun MainScaffold(
                         games = viewModel.supportedGames,
                         season = currentSeason,
                         earnOpportunities = earnOpportunities,
-                        onTournamentClick = { viewModel.selectTournament(it) },
+                        onTournamentClick = { selectedTournament = it },
                         onGameClick = { game ->
-                            viewModel.setGameFilter(game.type)
+                            viewModel.selectGameFilter(game.type)
                             currentTab = NavigationTab.TOURNAMENTS
                         },
-                        onDailyRewardClick = { viewModel.claimDailyReward(it) },
+                        onDailyRewardClick = { viewModel.claimEarnOpportunity(it) },
                         onWatchAdClick = { viewModel.startWatchingRewardedAd(it) },
                         onNavigateToTournaments = { currentTab = NavigationTab.TOURNAMENTS },
                         onNavigateToWallet = { currentTab = NavigationTab.WALLET },
@@ -186,21 +192,10 @@ fun MainScaffold(
                         selectedGameFilter = selectedGameFilter,
                         selectedStatusFilter = selectedStatusFilter,
                         searchQuery = searchQuery,
-                        onGameFilterChange = { viewModel.setGameFilter(it) },
-                        onStatusFilterChange = { viewModel.setTournamentStatusFilter(it) },
+                        onGameFilterChange = { viewModel.selectGameFilter(it) },
+                        onStatusFilterChange = { viewModel.selectTournamentStatus(it) },
                         onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                        onTournamentClick = { viewModel.selectTournament(it) }
-                    )
-                }
-                NavigationTab.GAMES -> {
-                    GamesScreen(
-                        games = viewModel.supportedGames,
-                        tournaments = tournaments,
-                        onSelectGame = { gameType ->
-                            viewModel.setGameFilter(gameType)
-                            currentTab = NavigationTab.TOURNAMENTS
-                        },
-                        onTournamentClick = { viewModel.selectTournament(it) }
+                        onTournamentClick = { selectedTournament = it }
                     )
                 }
                 NavigationTab.COMMUNITY -> {
@@ -208,31 +203,19 @@ fun MainScaffold(
                         currentUser = currentUser,
                         posts = communityPosts,
                         playerSearchResults = playerSearchResults,
-                        onLikePost = { viewModel.toggleLike(it) },
+                        onLikePost = { viewModel.toggleLikePost(it) },
+                        onFollowUser = { viewModel.toggleFollowUser(it) },
                         onAddComment = { postId, content -> viewModel.addComment(postId, content) },
                         onCreatePost = { content, gameTag -> viewModel.createPost(content, gameTag) },
                         onReportPost = { postId, reason -> viewModel.reportPost(postId, reason) },
                         onBlockUser = { authorId -> viewModel.blockUser(authorId) },
                         onSearchPlayers = { viewModel.searchPlayers(it) },
-                        onInvitePlayerToTeam = { viewModel.invitePlayerToTeam(it) }
-                    )
-                }
-                NavigationTab.TEAMS -> {
-                    TeamsScreen(
-                        currentTeam = currentTeam,
-                        currentUser = currentUser,
-                        onCreateTeam = { name, tag, game, bio -> viewModel.createTeam(name, tag, game, bio) },
-                        onInvitePlayer = { viewModel.invitePlayerToTeam(it) },
-                        onRemoveMember = { viewModel.removeTeamMember(it) }
-                    )
-                }
-                NavigationTab.WALLET -> {
-                    WalletScreen(
-                        depositBalance = depositBalance,
-                        tournamentWinnings = tournamentWinnings,
-                        transactions = transactions,
-                        onDeposit = { amount, method, refCode, phone -> viewModel.deposit(amount, method, refCode, phone) },
-                        onWithdrawal = { amount, method, account, name -> viewModel.requestWithdrawal(amount, method, account, name) }
+                        onSearchPosts = { viewModel.setCommunitySearchQuery(it) },
+                        onInvitePlayerToTeam = { viewModel.invitePlayerToTeam(it) },
+                        onOpenDirectChat = { playerId, playerName, gameType ->
+                            viewModel.openDirectChatWithPlayer(playerId, playerName, gameType)
+                        },
+                        onOpenGeneralChat = { viewModel.openChat() }
                     )
                 }
                 NavigationTab.REWARDS -> {
@@ -244,16 +227,16 @@ fun MainScaffold(
                         miniGames = miniGames,
                         dailyGamePointsEarned = dailyGamePointsEarned,
                         economyConfig = economyConfig,
-                        activePlayingGame = activePlayingMiniGame,
+                        activePlayingGame = activeMiniGame,
                         lastGameRewardResult = lastGameRewardResult,
                         isWatchingAd = isWatchingAd,
                         adCountdown = adCountdown,
-                        onClaimOpportunity = { viewModel.claimDailyReward(it) },
+                        onClaimOpportunity = { viewModel.claimEarnOpportunity(it) },
                         onWatchAd = { viewModel.startWatchingRewardedAd(it) },
                         onRedeemReward = { viewModel.redeemReward(it) },
                         onPlayGame = { viewModel.playMiniGame(it) },
                         onCloseGame = { viewModel.closeMiniGame() },
-                        onSubmitGameSession = { sub, adWatched -> viewModel.submitMiniGameSession(sub, adWatched) },
+                        onSubmitGameSession = { sub, watchedAd -> viewModel.submitMiniGameSession(sub, watchedAd) },
                         onWatchAdForGameMultiplier = { viewModel.watchAdForMiniGameMultiplier(it) }
                     )
                 }
@@ -261,8 +244,19 @@ fun MainScaffold(
                     ProfileScreen(
                         user = currentUser,
                         onUpdateGameId = { gameType, inGameId, inGameName -> viewModel.updateGameId(gameType, inGameId, inGameName) },
+                        onChangeUsernameOnce = { viewModel.changeUsernameOnce(it) },
+                        onSubmitAdminUsernameRequest = { desired, reason -> viewModel.submitAdminUsernameRequest(desired, reason) },
                         onNavigateToRankings = { currentTab = NavigationTab.RANKINGS },
                         onNavigateToWallet = { currentTab = NavigationTab.WALLET }
+                    )
+                }
+                NavigationTab.WALLET -> {
+                    WalletScreen(
+                        depositBalance = depositBalance,
+                        tournamentWinnings = tournamentWinnings,
+                        transactions = transactions,
+                        onDeposit = { amount, method, refCode, phone -> viewModel.depositFunds(amount, method, refCode, phone) },
+                        onWithdrawal = { amount, method, account, name -> viewModel.requestWithdrawal(amount, method, account, name) }
                     )
                 }
                 NavigationTab.RANKINGS -> {
@@ -274,6 +268,15 @@ fun MainScaffold(
                         onClaimReward = { viewModel.claimSeasonReward(it) }
                     )
                 }
+                NavigationTab.TEAMS -> {
+                    TeamsScreen(
+                        currentTeam = currentTeam,
+                        currentUser = currentUser,
+                        onCreateTeam = { name, tag, game, bio -> viewModel.createTeam(name, tag, game, bio) },
+                        onInvitePlayer = { viewModel.invitePlayerToTeam(it) },
+                        onRemoveMember = { viewModel.removeTeamMember(it) }
+                    )
+                }
             }
         }
     }
@@ -283,9 +286,15 @@ fun MainScaffold(
         TournamentDetailSheet(
             tournament = tournament,
             currentUser = currentUser,
-            onDismiss = { viewModel.selectTournament(null) },
+            onDismiss = { selectedTournament = null },
             onRegister = { tourney, usePoints ->
-                viewModel.registerForTournament(tourney, usePoints)
+                viewModel.registerTournament(tourney, usePoints)
+            },
+            onSubmitMatchResult = { tId, mId, s1, s2, proof ->
+                viewModel.submitMatchResult(tId, mId, s1, s2, proof)
+            },
+            onDisputeMatch = { tId, mId, reason ->
+                viewModel.disputeMatch(tId, mId, reason)
             }
         )
     }
@@ -297,6 +306,23 @@ fun MainScaffold(
             onDismiss = { showNotificationsSheet = false },
             onMarkRead = { viewModel.markNotificationRead(it) },
             onMarkAllRead = { viewModel.markAllNotificationsRead() }
+        )
+    }
+
+    // Modal Private Chat Sheet
+    if (showChatSheet) {
+        val activeConvMessages = activeConversation?.let { messagesMap[it.id] } ?: emptyList()
+        ChatSheet(
+            conversations = conversations,
+            activeConversation = activeConversation,
+            messages = activeConvMessages,
+            onSelectConversation = { viewModel.selectConversation(it) },
+            onSendMessage = { text, timer, isVoice -> viewModel.sendMessage(text, timer, isVoice) },
+            onSetTimer = { viewModel.setChatTimer(it) },
+            onBlockUser = { viewModel.blockUser(it) },
+            onReportUser = { id, reason -> viewModel.reportPost(id, reason) },
+            onViewOnceClick = { viewModel.markViewOnceMessage(it) },
+            onDismiss = { viewModel.closeChat() }
         )
     }
 }

@@ -14,6 +14,14 @@ enum class TournamentFormat(val titleArabic: String, val teamSize: Int) {
     ONE_VS_ONE("1 ضد 1 (eFootball)", 1)
 }
 
+enum class MatchSubmissionStatus(val titleArabic: String) {
+    SCHEDULED("مجدولة بانتظار البدء"),
+    IN_PROGRESS("جارية الآن"),
+    SUBMITTED_PENDING_REVIEW("تم رفع النتيجة - بانتظار مراجعة الإدارة"),
+    DISPUTED("اعتراض مقدم - قيد فحص الحكام"),
+    APPROVED("معتمدة رسمياً")
+}
+
 data class TournamentRule(
     val id: Int,
     val ruleArabic: String
@@ -28,7 +36,10 @@ data class TournamentMatch(
     val team2Score: Int? = null,
     val scheduledTime: String,
     val isCompleted: Boolean = false,
-    val winnerName: String? = null
+    val winnerName: String? = null,
+    val submissionStatus: MatchSubmissionStatus = MatchSubmissionStatus.SCHEDULED,
+    val screenshotProofUrl: String? = null,
+    val disputeReason: String? = null
 )
 
 data class TournamentStanding(
